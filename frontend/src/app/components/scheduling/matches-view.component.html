@@ -1,0 +1,273 @@
+<div class="matches-view-container">
+  <!-- Header -->
+  <div class="matches-header">
+    <div class="header-content">
+      <h2>Tournament Matches</h2>
+      <div class="header-actions">
+        <button mat-raised-button color="primary" (click)="refreshMatches()">
+          <mat-icon>refresh</mat-icon>
+          Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div *ngIf="isLoading" class="loading-container">
+    <mat-progress-spinner mode="indeterminate"></mat-progress-spinner>
+    <p>Loading matches...</p>
+  </div>
+
+  <!-- No matches state -->
+  <div *ngIf="!isLoading && matches.length === 0" class="no-matches-container">
+    <mat-icon class="large-icon">event_busy</mat-icon>
+    <h3>No Matches Scheduled</h3>
+    <p>Generate a tournament schedule to see matches here.</p>
+    <button mat-raised-button color="primary" (click)="goToScheduleBuilder()">
+      <mat-icon>schedule</mat-icon>
+      Create Schedule
+    </button>
+  </div>
+
+  <!-- Matches content -->
+  <div *ngIf="!isLoading && matches.length > 0" class="matches-content">
+    
+    <!-- View toggle -->
+    <mat-tab-group [(selectedIndex)]="selectedViewIndex" class="view-tabs">
+      <mat-tab label="Schedule View">
+        <div class="schedule-view-content">
+          <div class="matches-by-day">
+            <div *ngFor="let dayGroup of matchesByDay" class="day-group">
+              <h3 class="day-header">{{ dayGroup.date }}</h3>
+              <div class="matches-grid">
+                <div 
+                  *ngFor="let match of dayGroup.matches" 
+                  class="match-card"
+                  [class.completed]="match.status === 'completed'"
+                  [class.in-progress]="match.status === 'in-progress'"
+                  [class.scheduled]="match.status === 'scheduled'">
+                  
+                  <div class="match-header">
+                    <span class="match-title">Round {{ match.round }} - Match {{ match.matchNumber }}</span>
+                    <div class="match-status" [ngClass]="'status-' + match.status">
+                      {{ match.status | titlecase }}
+                    </div>
+                  </div>
+
+                  <div class="match-content">
+                    <div class="teams-display">
+                      <div class="team-container" [class.winner]="match.winner?._id === match.team1._id">
+                        <div class="team-name">{{ getTeamName(match.team1) }}</div>
+                        <div *ngIf="match.winner?._id === match.team1._id" class="winner-badge">
+                          <mat-icon>emoji_events</mat-icon>
+                        </div>
+                      </div>
+                      
+                      <div class="vs-divider">VS</div>
+                      
+                      <div class="team-container" [class.winner]="match.winner?._id === match.team2._id">
+                        <div class="team-name">{{ getTeamName(match.team2) }}</div>
+                        <div *ngIf="match.winner?._id === match.team2._id" class="winner-badge">
+                          <mat-icon>emoji_events</mat-icon>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="match-details">
+                      <div class="detail-item">
+                        <mat-icon>schedule</mat-icon>
+                        <span>{{ getMatchTimeDisplay(match) }}</span>
+                      </div>
+                      <div class="detail-item" *ngIf="match.court">
+                        <mat-icon>sports_tennis</mat-icon>
+                        <span>{{ getCourtDisplay(match.court) }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <mat-icon>timer</mat-icon>
+                        <span>{{ match.estimatedDuration || 90 }} min</span>
+                      </div>
+                      <div *ngIf="hasScore(match)" class="detail-item score-item">
+                        <mat-icon color="accent">score</mat-icon>
+                        <span class="live-score">{{ getMatchScore(match) }}</span>
+                      </div>
+                    </div>
+
+                    <div class="match-actions">
+                      <button 
+                        mat-button 
+                        color="primary"
+                        *ngIf="match.status === 'scheduled'"
+                        (click)="startMatch(match)">
+                        <mat-icon>play_arrow</mat-icon>
+                        Start Match
+                      </button>
+                      <button 
+                        mat-button 
+                        *ngIf="canRescheduleMatch(match)"
+                        (click)="openRescheduleDialog(match)">
+                        <mat-icon>event</mat-icon>
+                        Reschedule
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+
+      <!-- Table View -->
+      <mat-tab label="Table View">
+        <div class="table-view-content">
+          <table mat-table [dataSource]="matches" class="matches-table">
+            <ng-container matColumnDef="match">
+              <th mat-header-cell *matHeaderCellDef>Match</th>
+              <td mat-cell *matCellDef="let match">
+                R{{ match.round }}M{{ match.matchNumber }}
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="teams">
+              <th mat-header-cell *matHeaderCellDef>Teams</th>
+              <td mat-cell *matCellDef="let match">
+                <div class="table-teams">
+                  <span class="team-name">{{ getTeamName(match.team1) }}</span>
+                  <span class="vs-text">vs</span>
+                  <span class="team-name">{{ getTeamName(match.team2) }}</span>
+                </div>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="schedule">
+              <th mat-header-cell *matHeaderCellDef>Scheduled</th>
+              <td mat-cell *matCellDef="let match">
+                {{ getMatchTimeDisplay(match) }}
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="court">
+              <th mat-header-cell *matHeaderCellDef>Court</th>
+              <td mat-cell *matCellDef="let match">
+                {{ getCourtDisplay(match.court) || 'TBD' }}
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let match">
+                <div class="status-chip" [ngClass]="'status-' + match.status">
+                  {{ match.status | titlecase }}
+                </div>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Actions</th>
+              <td mat-cell *matCellDef="let match">
+                <button 
+                  mat-icon-button 
+                  *ngIf="canRescheduleMatch(match)"
+                  (click)="openRescheduleDialog(match)"
+                  matTooltip="Reschedule">
+                  <mat-icon>event</mat-icon>
+                </button>
+                <button 
+                  mat-icon-button 
+                  color="accent"
+                  *ngIf="match.status === 'scheduled'"
+                  (click)="startMatch(match)"
+                  matTooltip="Start Match">
+                  <mat-icon>play_arrow</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        </div>
+      </mat-tab>
+
+      <!-- Drag & Drop Schedule View -->
+      <mat-tab label="Drag & Drop Schedule">
+        <div class="drag-drop-view-content">
+          <div class="drag-drop-header">
+            <div class="header-info">
+              <h3>Drag & Drop Schedule</h3>
+              <p>Drag matches between time slots to reschedule them</p>
+            </div>
+            <div class="header-actions">
+              <button mat-raised-button 
+                      [color]="isDragDropEnabled ? 'accent' : 'primary'"
+                      (click)="toggleDragDrop()">
+                <mat-icon>{{ isDragDropEnabled ? 'lock_open' : 'lock' }}</mat-icon>
+                {{ isDragDropEnabled ? 'Disable' : 'Enable' }} Drag & Drop
+              </button>
+            </div>
+          </div>
+
+          <!-- Drag & Drop Schedule Grid -->
+          <div class="schedule-grid" *ngIf="timeSlotsByDay.length > 0">
+            <div *ngFor="let dayGroup of timeSlotsByDay" class="day-column">
+              <h4 class="day-header">{{ dayGroup.date | date:'EEEE, MMM d' }}</h4>
+              
+              <div class="time-slots-column">
+                <div *ngFor="let timeSlot of dayGroup.timeSlots" 
+                     class="time-slot-container"
+                     [class.available]="timeSlot.status === 'available'"
+                     [class.booked]="timeSlot.status === 'booked'"
+                     cdkDropList
+                     [cdkDropListData]="timeSlot"
+                     [cdkDropListDisabled]="!isDragDropEnabled"
+                     (cdkDropListDropped)="onMatchDrop($event)"
+                     cdkDropListSortingDisabled>
+                  
+                  <div class="time-slot-header">
+                    <span class="time-display">{{ getTimeSlotDisplayName(timeSlot) }}</span>
+                    <div class="status-chip" [ngClass]="'status-' + timeSlot.status">
+                      {{ timeSlot.status | titlecase }}
+                    </div>
+                  </div>
+
+                  <div class="matches-in-slot">
+                    <div *ngFor="let match of getMatchesInTimeSlot(timeSlot)" 
+                         class="match-card compact draggable-match-card"
+                         cdkDrag
+                         [cdkDragData]="match"
+                         [cdkDragDisabled]="!isDragDropEnabled">
+                      
+                      <div class="match-header">
+                        <span class="match-title">R{{ match.round }}M{{ match.matchNumber }}</span>
+                        <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
+                      </div>
+
+                      <div class="teams-display">
+                        <span class="team-name">{{ getTeamName(match.team1) }}</span>
+                        <span class="vs-divider">VS</span>
+                        <span class="team-name">{{ getTeamName(match.team2) }}</span>
+                      </div>
+
+                      <div class="match-status">
+                        <div class="status-chip" [ngClass]="'status-' + match.status">
+                          {{ match.status | titlecase }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- No time slots message -->
+          <div *ngIf="timeSlotsByDay.length === 0" class="no-schedule">
+            <mat-icon>schedule</mat-icon>
+            <h3>No time slots available</h3>
+            <p>Create a schedule first to enable drag & drop functionality.</p>
+          </div>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </div>
+</div>

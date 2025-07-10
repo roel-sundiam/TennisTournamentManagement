@@ -1,0 +1,344 @@
+<div class="automation-panel-container">
+  <!-- Header Section -->
+  <div class="header-section">
+    <div class="title-section">
+      <h1>
+        <mat-icon>smart_toy</mat-icon>
+        Match Automation & Control
+      </h1>
+      <p class="subtitle">Automated rules, alerts, and smart scheduling</p>
+      <div class="header-actions">
+        <button mat-raised-button color="primary" (click)="addNewRule()">
+          <mat-icon>add</mat-icon>
+          New Rule
+        </button>
+        <button mat-raised-button color="accent" (click)="exportAutomationData()">
+          <mat-icon>file_download</mat-icon>
+          Export Data
+        </button>
+        <button mat-button (click)="importAutomationData()">
+          <mat-icon>file_upload</mat-icon>
+          Import
+        </button>
+      </div>
+    </div>
+    
+    <!-- Quick Stats -->
+    <div class="quick-stats">
+      <div class="stat-item success">
+        <mat-icon>rule</mat-icon>
+        <div class="stat-content">
+          <span class="stat-number">{{ getActiveRulesCount() }}</span>
+          <span class="stat-label">Active Rules</span>
+        </div>
+      </div>
+      
+      <div class="stat-item warning" [matBadge]="getUnacknowledgedAlertsCount()" 
+           [matBadgeHidden]="getUnacknowledgedAlertsCount() === 0">
+        <mat-icon>notifications</mat-icon>
+        <div class="stat-content">
+          <span class="stat-number">{{ alerts.length }}</span>
+          <span class="stat-label">Total Alerts</span>
+        </div>
+      </div>
+      
+      <div class="stat-item info">
+        <mat-icon>flash_on</mat-icon>
+        <div class="stat-content">
+          <span class="stat-number">{{ getTotalTriggersCount() }}</span>
+          <span class="stat-label">Total Triggers</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Tabs -->
+  <mat-tab-group class="automation-tabs" [(selectedIndex)]="selectedTab">
+    
+    <!-- Automation Rules Tab -->
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>rule</mat-icon>
+        <span>Automation Rules</span>
+        <span class="tab-badge" *ngIf="getActiveRulesCount() > 0">({{ getActiveRulesCount() }})</span>
+      </ng-template>
+      <div class="tab-content">
+        
+        <!-- Rules Overview Cards -->
+        <div class="rules-overview">
+          <mat-card class="overview-card" *ngFor="let rule of automationRules">
+            <mat-card-header>
+              <div class="rule-header">
+                <div class="rule-info">
+                  <mat-card-title>{{ rule.name }}</mat-card-title>
+                  <mat-card-subtitle>{{ rule.description }}</mat-card-subtitle>
+                </div>
+                <div class="rule-controls">
+                  <mat-slide-toggle 
+                    [checked]="rule.enabled" 
+                    (change)="toggleRule(rule)"
+                    [color]="getRuleStatusColor(rule)">
+                  </mat-slide-toggle>
+                  <button mat-icon-button [matMenuTriggerFor]="ruleMenu">
+                    <mat-icon>more_vert</mat-icon>
+                  </button>
+                  <mat-menu #ruleMenu="matMenu">
+                    <button mat-menu-item (click)="editRule(rule)">
+                      <mat-icon>edit</mat-icon>
+                      Edit Rule
+                    </button>
+                    <button mat-menu-item (click)="manualTriggerRule(rule)">
+                      <mat-icon>play_arrow</mat-icon>
+                      Manual Trigger
+                    </button>
+                    <button mat-menu-item (click)="deleteRule(rule)" class="delete-action">
+                      <mat-icon>delete</mat-icon>
+                      Delete Rule
+                    </button>
+                  </mat-menu>
+                </div>
+              </div>
+            </mat-card-header>
+            
+            <mat-card-content>
+              <div class="rule-details">
+                <div class="detail-section">
+                  <h4>Conditions</h4>
+                  <div class="conditions-list">
+                    <mat-chip-set>
+                      <mat-chip *ngFor="let condition of rule.conditions">
+                        {{ toTitleCase(condition.type.replace('_', ' ')) }}
+                        <span *ngIf="condition.value"> > {{ condition.value }}</span>
+                      </mat-chip>
+                    </mat-chip-set>
+                  </div>
+                </div>
+                
+                <div class="detail-section">
+                  <h4>Actions</h4>
+                  <div class="actions-list">
+                    <mat-chip-set>
+                      <mat-chip *ngFor="let action of rule.actions" [color]="'accent'">
+                        {{ toTitleCase(action.type.replace('_', ' ')) }}
+                      </mat-chip>
+                    </mat-chip-set>
+                  </div>
+                </div>
+                
+                <div class="rule-stats">
+                  <div class="stat-item">
+                    <mat-icon>schedule</mat-icon>
+                    <span>Last triggered: {{ formatLastTriggered(rule.lastTriggered) }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <mat-icon>flash_on</mat-icon>
+                    <span>Trigger count: {{ rule.triggerCount }}</span>
+                  </div>
+                </div>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        </div>
+        
+        <!-- No Rules State -->
+        <div class="no-rules-state" *ngIf="automationRules.length === 0">
+          <mat-icon class="large-icon">rule</mat-icon>
+          <h2>No Automation Rules</h2>
+          <p>Create automation rules to automatically handle match events and conditions.</p>
+          <button mat-raised-button color="primary" (click)="addNewRule()">
+            <mat-icon>add</mat-icon>
+            Create First Rule
+          </button>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Alerts & Notifications Tab -->
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>notifications</mat-icon>
+        <span>Alerts</span>
+        <span class="tab-badge critical" *ngIf="getCriticalAlertsCount() > 0">{{ getCriticalAlertsCount() }}</span>
+        <span class="tab-badge" *ngIf="getCriticalAlertsCount() === 0 && getUnacknowledgedAlertsCount() > 0">
+          {{ getUnacknowledgedAlertsCount() }}
+        </span>
+      </ng-template>
+      <div class="tab-content">
+        
+        <!-- Alert Controls -->
+        <div class="alert-controls" *ngIf="alerts.length > 0">
+          <button mat-raised-button color="warn" (click)="clearAllAlerts()">
+            <mat-icon>clear_all</mat-icon>
+            Clear All Alerts
+          </button>
+        </div>
+        
+        <!-- Alerts List -->
+        <div class="alerts-list" *ngIf="alerts.length > 0">
+          <mat-card class="alert-card" 
+                    *ngFor="let alert of alerts" 
+                    [class]="'alert-' + alert.type"
+                    [class.acknowledged]="alert.acknowledged">
+            <mat-card-header>
+              <div class="alert-header">
+                <div class="alert-icon">
+                  <mat-icon [color]="getAlertColor(alert)">{{ getAlertIcon(alert) }}</mat-icon>
+                </div>
+                <div class="alert-info">
+                  <mat-card-title>{{ alert.title }}</mat-card-title>
+                  <mat-card-subtitle>
+                    <mat-icon class="priority-icon" [color]="getPriorityColor(alert.priority)">
+                      {{ getPriorityIcon(alert.priority) }}
+                    </mat-icon>
+                    {{ toTitleCase(alert.priority) }} Priority
+                  </mat-card-subtitle>
+                </div>
+                <div class="alert-timestamp">
+                  {{ formatTimestamp(alert.timestamp) }}
+                </div>
+              </div>
+            </mat-card-header>
+            
+            <mat-card-content>
+              <p class="alert-message">{{ alert.message }}</p>
+              <div class="alert-meta">
+                <span class="match-id">Match: {{ alert.matchId }}</span>
+                <mat-chip *ngIf="alert.acknowledged" color="primary">Acknowledged</mat-chip>
+                <mat-chip *ngIf="alert.resolutionTime" color="primary">Resolved</mat-chip>
+              </div>
+            </mat-card-content>
+            
+            <mat-card-actions *ngIf="!alert.acknowledged">
+              <button mat-button color="primary" (click)="acknowledgeAlert(alert)">
+                <mat-icon>check</mat-icon>
+                Acknowledge
+              </button>
+              <button mat-button color="accent" (click)="resolveAlert(alert)">
+                <mat-icon>done_all</mat-icon>
+                Resolve
+              </button>
+            </mat-card-actions>
+          </mat-card>
+        </div>
+        
+        <!-- No Alerts State -->
+        <div class="no-alerts-state" *ngIf="alerts.length === 0">
+          <mat-icon class="large-icon">notifications_none</mat-icon>
+          <h2>No Active Alerts</h2>
+          <p>All clear! No alerts requiring attention at this time.</p>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Auto-Scheduling Tab -->
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>schedule</mat-icon>
+        <span>Auto-Scheduling</span>
+      </ng-template>
+      <div class="tab-content" *ngIf="schedulingConfig">
+        
+        <!-- Scheduling Status Card -->
+        <mat-card class="scheduling-status-card">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>schedule</mat-icon>
+              Auto-Scheduling Status
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="status-display">
+              <div class="status-indicator" [class.enabled]="schedulingConfig.enabled">
+                <mat-icon>{{ schedulingConfig.enabled ? 'toggle_on' : 'toggle_off' }}</mat-icon>
+                <span>{{ schedulingConfig.enabled ? 'Enabled' : 'Disabled' }}</span>
+              </div>
+              <mat-slide-toggle 
+                [checked]="schedulingConfig.enabled" 
+                (change)="toggleAutoScheduling()"
+                color="primary">
+                Enable Auto-Scheduling
+              </mat-slide-toggle>
+            </div>
+          </mat-card-content>
+        </mat-card>
+        
+        <!-- Scheduling Configuration -->
+        <mat-card class="scheduling-config-card" *ngIf="schedulingConfig.enabled">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>settings</mat-icon>
+              Configuration
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="config-grid">
+              
+              <!-- Court Assignment Strategy -->
+              <mat-form-field appearance="outline">
+                <mat-label>Court Assignment Strategy</mat-label>
+                <mat-select [value]="schedulingConfig.courtAssignmentStrategy" 
+                           (selectionChange)="updateSchedulingStrategy($event.value)">
+                  <mat-option value="round_robin">Round Robin</mat-option>
+                  <mat-option value="load_balanced">Load Balanced</mat-option>
+                  <mat-option value="priority_based">Priority Based</mat-option>
+                </mat-select>
+              </mat-form-field>
+              
+              <!-- Buffer Time -->
+              <mat-form-field appearance="outline">
+                <mat-label>Buffer Time (minutes)</mat-label>
+                <input matInput type="number" 
+                       [value]="schedulingConfig.bufferTimeBetweenMatches"
+                       (input)="updateBufferTime($any($event.target).value)"
+                       min="0" max="60">
+              </mat-form-field>
+              
+              <!-- Max Concurrent Matches -->
+              <mat-form-field appearance="outline">
+                <mat-label>Max Concurrent Matches</mat-label>
+                <input matInput type="number" 
+                       [value]="schedulingConfig.maxConcurrentMatches"
+                       (input)="updateMaxConcurrentMatches($any($event.target).value)"
+                       min="1" max="20">
+              </mat-form-field>
+              
+            </div>
+            
+            <!-- Configuration Summary -->
+            <div class="config-summary">
+              <h4>Current Configuration</h4>
+              <div class="summary-grid">
+                <div class="summary-item">
+                  <span class="label">Strategy:</span>
+                  <span class="value">{{ toTitleCase(schedulingConfig.courtAssignmentStrategy.replace('_', ' ')) }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="label">Buffer Time:</span>
+                  <span class="value">{{ schedulingConfig.bufferTimeBetweenMatches }} minutes</span>
+                </div>
+                <div class="summary-item">
+                  <span class="label">Max Matches:</span>
+                  <span class="value">{{ schedulingConfig.maxConcurrentMatches }}</span>
+                </div>
+              </div>
+            </div>
+            
+          </mat-card-content>
+        </mat-card>
+        
+        <!-- Disabled State -->
+        <mat-card class="disabled-state-card" *ngIf="!schedulingConfig.enabled">
+          <mat-card-content>
+            <div class="disabled-message">
+              <mat-icon>schedule_send</mat-icon>
+              <h3>Auto-Scheduling Disabled</h3>
+              <p>Enable auto-scheduling to automatically manage match assignments and court utilization.</p>
+            </div>
+          </mat-card-content>
+        </mat-card>
+        
+      </div>
+    </mat-tab>
+
+  </mat-tab-group>
+</div>

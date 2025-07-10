@@ -1,0 +1,112 @@
+<!-- Hero Section -->
+<section class="hero-section">
+  <div class="hero-content">
+    <div class="hero-text">
+      <h1 class="hero-title">
+        <mat-icon class="hero-icon">sports_tennis</mat-icon>
+        Tennis Tournament Manager
+      </h1>
+      <p class="hero-subtitle">
+        Professional tournament management made simple. Create, manage, and track tennis tournaments 
+        with powerful tools for players, teams, brackets, and live scoring.
+      </p>
+      <div class="hero-actions">
+        <button mat-raised-button color="primary" class="cta-button" routerLink="/tournaments">
+          <mat-icon>emoji_events</mat-icon>
+          View Tournaments
+        </button>
+        <button mat-stroked-button color="primary" class="secondary-button" routerLink="/tournaments/create">
+          <mat-icon>add</mat-icon>
+          Create Tournament
+        </button>
+      </div>
+    </div>
+    <div class="hero-image">
+      <div class="tennis-court">
+        <div class="court-lines"></div>
+        <mat-icon class="tennis-ball">sports_tennis</mat-icon>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features Section -->
+<section class="features-section">
+  <div class="container">
+    <h2 class="section-title">Powerful Tournament Management Features</h2>
+    <p class="section-subtitle">Everything you need to run professional tennis tournaments</p>
+    
+    <div class="features-grid">
+      <mat-card class="feature-card" *ngFor="let feature of features">
+        <mat-card-header>
+          <div class="feature-icon-container">
+            <mat-icon class="feature-icon" [style.color]="'var(--primary-color)'">{{feature.icon}}</mat-icon>
+          </div>
+          <mat-card-title>{{feature.title}}</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p class="feature-description">{{feature.description}}</p>
+        </mat-card-content>
+        <mat-card-actions>
+          <button mat-button color="primary" [routerLink]="feature.route">
+            {{feature.action}}
+            <mat-icon>arrow_forward</mat-icon>
+          </button>
+        </mat-card-actions>
+      </mat-card>
+    </div>
+  </div>
+</section>
+
+<!-- Stats Section -->
+<section class="stats-section">
+  <div class="container">
+    <h2 class="section-title">Tournament Management Excellence</h2>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <mat-icon class="stat-icon">emoji_events</mat-icon>
+        <h3 class="stat-number">500+</h3>
+        <p class="stat-label">Tournaments Managed</p>
+      </div>
+      <div class="stat-item">
+        <mat-icon class="stat-icon">groups</mat-icon>
+        <h3 class="stat-number">10K+</h3>
+        <p class="stat-label">Players Registered</p>
+      </div>
+      <div class="stat-item">
+        <mat-icon class="stat-icon">sports_tennis</mat-icon>
+        <h3 class="stat-number">25K+</h3>
+        <p class="stat-label">Matches Played</p>
+      </div>
+      <div class="stat-item">
+        <mat-icon class="stat-icon">leaderboard</mat-icon>
+        <h3 class="stat-number">99.9%</h3>
+        <p class="stat-label">Uptime Reliability</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick Actions Section -->
+<section class="quick-actions-section">
+  <div class="container">
+    <mat-card class="quick-actions-card">
+      <mat-card-header>
+        <mat-card-title>Ready to Get Started?</mat-card-title>
+        <mat-card-subtitle>Jump right into tournament management</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="quick-actions-grid">
+          <button mat-raised-button color="primary" routerLink="/tournaments" class="quick-action-btn">
+            <mat-icon>emoji_events</mat-icon>
+            <span>Manage Tournaments</span>
+          </button>
+          <button mat-stroked-button color="primary" routerLink="/players" class="quick-action-btn">
+            <mat-icon>person_add</mat-icon>
+            <span>Manage Players</span>
+          </button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</section>

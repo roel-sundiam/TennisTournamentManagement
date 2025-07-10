@@ -1,0 +1,226 @@
+<div class="team-generator-container">
+  <div class="header-section">
+    <div class="title-section">
+      <h1>
+        <mat-icon>groups</mat-icon>
+        Team Generation
+      </h1>
+      <p class="subtitle" *ngIf="tournament">{{ tournament.name }}</p>
+      <p class="description">Create teams from registered players</p>
+    </div>
+    <div class="action-buttons">
+      <button mat-button (click)="clearTeams()" [disabled]="teams.length === 0" class="clear-btn">
+        <mat-icon>clear_all</mat-icon>
+        Clear Teams
+      </button>
+      <button mat-raised-button color="primary" (click)="saveTeams()" [disabled]="teams.length === 0" class="save-btn">
+        <mat-icon>save</mat-icon>
+        Save Teams
+      </button>
+    </div>
+  </div>
+
+  <div class="generation-content" *ngIf="availablePlayers.length > 0; else noPlayersState">
+    <!-- Team Generation Options -->
+    <div class="options-card">
+      <div class="card-header">
+        <h2>
+          <mat-icon>settings</mat-icon>
+          Team Generation Options
+        </h2>
+      </div>
+
+      <div class="card-content">
+        <div class="options-grid">
+          <div class="game-type-display" *ngIf="tournament">
+            <mat-icon>sports_tennis</mat-icon>
+            <div class="game-type-info">
+              <span class="label">Game Type:</span>
+              <span class="value">{{ tournament.gameType | titlecase }} ({{ options.teamSize }} player{{ options.teamSize > 1 ? 's' : '' }} per team)</span>
+            </div>
+          </div>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Pairing Method</mat-label>
+            <mat-select [(value)]="options.pairingMethod" (selectionChange)="onOptionsChange()">
+              <mat-option value="random">Random Pairing</mat-option>
+              <mat-option value="seeded">Seeded Pairing (High + Low)</mat-option>
+              <mat-option value="manual">Manual Selection</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="generation-info">
+          <div class="info-item">
+            <mat-icon>groups</mat-icon>
+            <span>Available Players: {{ availablePlayers.length }}</span>
+          </div>
+          <div class="info-item">
+            <mat-icon>team_dashboard</mat-icon>
+            <span>Possible Teams: {{ getPossibleTeamsCount() }}</span>
+          </div>
+          <div class="info-item" *ngIf="getUnusedPlayersCount() > 0">
+            <mat-icon>person_off</mat-icon>
+            <span>Unused Players: {{ getUnusedPlayersCount() }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-actions">
+        <button mat-raised-button color="accent" (click)="generateTeams()" [disabled]="isGenerating" class="generate-btn">
+          <mat-spinner *ngIf="isGenerating" diameter="20"></mat-spinner>
+          <mat-icon *ngIf="!isGenerating">auto_fix_high</mat-icon>
+          {{ isGenerating ? 'Generating...' : 'Generate Teams' }}
+        </button>
+        <button mat-button (click)="shuffleTeams()" [disabled]="teams.length === 0" class="shuffle-btn">
+          <mat-icon>shuffle</mat-icon>
+          Shuffle Teams
+        </button>
+      </div>
+    </div>
+
+    <!-- Available Players -->
+    <div class="players-card" *ngIf="options.pairingMethod === 'manual'">
+      <div class="card-header">
+        <h2>
+          <mat-icon>person</mat-icon>
+          Available Players
+        </h2>
+      </div>
+      <div class="card-content">
+        <div class="players-grid">
+          <div 
+            class="player-item"
+            *ngFor="let player of availablePlayers"
+            [class.selected]="isPlayerSelected(player)"
+            [class.disabled]="isPlayerAlreadyOnTeam(player)"
+            [class.unavailable]="isPlayerAlreadyOnTeam(player)"
+            (click)="!isPlayerAlreadyOnTeam(player) && togglePlayerSelection(player)"
+          >
+            <div class="player-avatar">
+              <mat-icon>person</mat-icon>
+            </div>
+            <div class="player-info">
+              <div class="player-name">{{ player.name }}</div>
+              <div class="player-skill">{{ player.skillLevel | titlecase }}</div>
+            </div>
+            <mat-chip [color]="getSkillLevelColor(player.skillLevel)" selected>
+              {{ player.skillLevel | titlecase }}
+            </mat-chip>
+          </div>
+        </div>
+
+        <div class="manual-team-creation" *ngIf="selectedPlayers.length > 0">
+          <div class="divider"></div>
+          <div class="selected-players">
+            <h3>Selected Players ({{ selectedPlayers.length }})</h3>
+            <div class="selected-list">
+              <mat-chip 
+                *ngFor="let player of selectedPlayers" 
+                (removed)="removePlayerFromSelection(player)"
+                removable
+              >
+                {{ player.name }}
+                <mat-icon matChipRemove>cancel</mat-icon>
+              </mat-chip>
+            </div>
+            <button 
+              mat-raised-button 
+              color="primary" 
+              (click)="createTeamFromSelection()"
+              [disabled]="selectedPlayers.length !== options.teamSize"
+              class="create-team-btn"
+            >
+              <mat-icon>add</mat-icon>
+              Create Team ({{ options.teamSize }} player{{ options.teamSize > 1 ? 's' : '' }} needed)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generated Teams -->
+    <div class="teams-card" *ngIf="teams.length > 0">
+      <div class="card-header">
+        <h2>
+          <mat-icon>groups</mat-icon>
+          Generated Teams ({{ teams.length }})
+        </h2>
+      </div>
+      <div class="card-content">
+        <div class="teams-grid">
+          <div class="team-item" *ngFor="let team of teams; let i = index">
+            <div class="team-header">
+              <div class="team-number">Team {{ i + 1 }}</div>
+              <button mat-icon-button color="warn" (click)="removeTeam(i)" class="delete-btn">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+            
+            <div class="team-players">
+              <div class="player-in-team" *ngFor="let player of team.players">
+                <div class="player-avatar">
+                  <mat-icon>person</mat-icon>
+                </div>
+                <div class="player-details">
+                  <div class="player-name">
+                    {{ getPlayerDisplayNameWithSeed(player) }}
+                  </div>
+                  <div class="player-meta">
+                    <span class="skill">{{ player.skillLevel | titlecase }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="team-stats" *ngIf="options.teamSize > 1">
+              <div class="stat-item">
+                <span class="stat-label">Combined Rank:</span>
+                <span class="stat-value">{{ getTeamCombinedRanking(team) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generation Summary -->
+    <div class="summary-card" *ngIf="teams.length > 0">
+      <div class="card-header">
+        <h2>
+          <mat-icon>analytics</mat-icon>
+          Generation Summary
+        </h2>
+      </div>
+      <div class="card-content">
+        <div class="summary-stats">
+          <div class="summary-item">
+            <div class="summary-label">Total Teams Created</div>
+            <div class="summary-value">{{ teams.length }}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Players Used</div>
+            <div class="summary-value">{{ getUsedPlayersCount() }} / {{ availablePlayers.length }}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Pairing Method</div>
+            <div class="summary-value">{{ getPairingMethodDisplay() }}</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <ng-template #noPlayersState>
+    <div class="empty-state">
+      <mat-icon class="empty-icon">person_add</mat-icon>
+      <h2>No Players Available</h2>
+      <p>Add players to this tournament before creating teams</p>
+      <button mat-raised-button color="primary" routerLink="/players">
+        <mat-icon>group_add</mat-icon>
+        Manage Players
+      </button>
+    </div>
+  </ng-template>
+</div>

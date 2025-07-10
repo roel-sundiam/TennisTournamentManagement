@@ -1,0 +1,215 @@
+<div class="bracket-container">
+
+  <div class="bracket-content" *ngIf="bracket">
+    <!-- Single Elimination Bracket -->
+    <div *ngIf="bracketFormat === 'single-elimination'" class="single-elimination-bracket">
+      <!-- Mobile scroll hint -->
+      <div class="mobile-scroll-hint">
+        <span>← Swipe to see all rounds →</span>
+      </div>
+      <div class="bracket-tree">
+        <div class="bracket-round" *ngFor="let round of bracket.rounds; let roundIndex = index" 
+             [style.--round-index]="roundIndex">
+          <div class="round-header">
+            <h3>{{ round.roundName }}</h3>
+          </div>
+          
+          <div class="round-matches">
+            <div class="match-container" *ngFor="let match of round.matches; let matchIndex = index"
+                 [style.--match-index]="matchIndex"
+                 [style.--total-matches]="round.matches.length">
+              
+              <!-- Force consistent bracket structure - REMOVE ALL ANGULAR CONDITIONALS -->
+              <div class="match-card fixed-bracket-card" 
+                   style="height: 200px !important; min-height: 200px !important; max-height: 200px !important; width: 100%; display: grid; grid-template-rows: 200px; background: linear-gradient(135deg, rgba(45, 45, 45, 0.95) 0%, rgba(35, 35, 35, 0.95) 100%); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: var(--border-radius-lg); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);"
+                   >
+                
+                <!-- Always render both player slots regardless of data -->
+                <div class="match-players fixed-match-players" 
+                     style="height: 200px !important; min-height: 200px !important; max-height: 200px !important; display: grid; grid-template-rows: 100px 100px;">
+                  <div class="player-slot fixed-player-slot"
+                       [class.winner]="match.winner?.id === match.player1?.id && match.player1?.name && match.player1?.name !== 'TBD'"
+                       style="height: 100px !important; min-height: 100px !important; max-height: 100px !important; display: flex; align-items: center; justify-content: space-between; padding: var(--space-3); border-bottom: 1px solid rgba(255, 255, 255, 0.15); background: transparent; gap: var(--space-3);">
+                    <div class="player-info fixed-player-info">
+                      <span class="player-name fixed-player-name">{{ getDisplayName(match.player1) }}</span>
+                    </div>
+                    <div class="player-score fixed-player-score">{{ match.score?.player1Score || '' }}</div>
+                  </div>
+                  
+                  <div class="player-slot fixed-player-slot"
+                       [class.winner]="match.winner?.id === match.player2?.id && match.player2?.name && match.player2?.name !== 'TBD'"
+                       style="height: 100px !important; min-height: 100px !important; max-height: 100px !important; display: flex; align-items: center; justify-content: space-between; padding: var(--space-3); background: transparent; gap: var(--space-3);">
+                    <div class="player-info fixed-player-info">
+                      <span class="player-name fixed-player-name">{{ getDisplayName(match.player2) }}</span>
+                    </div>
+                    <div class="player-score fixed-player-score">{{ match.score?.player2Score || '' }}</div>
+                  </div>
+                </div>
+                
+              </div>
+              
+              <!-- Connector lines -->
+              <div class="connector-right" *ngIf="roundIndex < bracket.rounds.length - 1"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Double Elimination Bracket -->
+    <div *ngIf="bracketFormat === 'double-elimination'" class="double-elimination-bracket">
+      <mat-tab-group>
+        <mat-tab label="Winners Bracket">
+          <div class="bracket-rounds">
+            <div class="bracket-round" *ngFor="let round of getWinnersRounds()">
+              <div class="round-header">
+                <h3>{{ round.roundName }}</h3>
+              </div>
+              <div class="round-matches">
+                <div class="match-card" *ngFor="let match of round.matches">
+                  <!-- Same match card structure as single elimination -->
+                  <div class="match-header">
+                    <span class="match-number">Match {{ match.matchNumber }}</span>
+                    <span class="match-status" [class]="'status-' + match.status">
+                      {{ match.status | titlecase }}
+                    </span>
+                  </div>
+                  
+                  <div class="match-players">
+                    <div class="player-row" [class.winner]="match.winner?.id === match.player1?.id">
+                      <div class="player-info">
+                        <span class="player-name">{{ getPlayerDisplayNameWithSeed(match.player1) || 'TBD' }}</span>
+                      </div>
+                      <div class="player-score">{{ match.score?.player1Score || '-' }}</div>
+                    </div>
+                    
+                    <div class="vs-divider">VS</div>
+                    
+                    <div class="player-row" [class.winner]="match.winner?.id === match.player2?.id">
+                      <div class="player-info">
+                        <span class="player-name">{{ getPlayerDisplayNameWithSeed(match.player2) || 'TBD' }}</span>
+                      </div>
+                      <div class="player-score">{{ match.score?.player2Score || '-' }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+        
+        <mat-tab label="Losers Bracket">
+          <div class="bracket-rounds">
+            <div class="bracket-round" *ngFor="let round of getLosersRounds()">
+              <div class="round-header">
+                <h3>{{ round.roundName }}</h3>
+              </div>
+              <div class="round-matches">
+                <div class="match-card" *ngFor="let match of round.matches">
+                  <!-- Same match card structure -->
+                  <div class="match-header">
+                    <span class="match-number">Match {{ match.matchNumber }}</span>
+                    <span class="match-status" [class]="'status-' + match.status">
+                      {{ match.status | titlecase }}
+                    </span>
+                  </div>
+                  
+                  <div class="match-players">
+                    <div class="player-row" [class.winner]="match.winner?.id === match.player1?.id">
+                      <div class="player-info">
+                        <span class="player-name">{{ getPlayerDisplayNameWithSeed(match.player1) || 'TBD' }}</span>
+                      </div>
+                      <div class="player-score">{{ match.score?.player1Score || '-' }}</div>
+                    </div>
+                    
+                    <div class="vs-divider">VS</div>
+                    
+                    <div class="player-row" [class.winner]="match.winner?.id === match.player2?.id">
+                      <div class="player-info">
+                        <span class="player-name">{{ getPlayerDisplayNameWithSeed(match.player2) || 'TBD' }}</span>
+                      </div>
+                      <div class="player-score">{{ match.score?.player2Score || '-' }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+    </div>
+
+    <!-- Round Robin Bracket -->
+    <div *ngIf="bracketFormat === 'round-robin'" class="round-robin-bracket">
+      <div class="round-robin-content">
+        <div class="standings-section">
+          <h3>Current Standings</h3>
+          <div class="standings-table">
+            <div class="standings-header">
+              <div class="rank">#</div>
+              <div class="player">Player</div>
+              <div class="wins">W</div>
+              <div class="losses">L</div>
+              <div class="sets">Sets</div>
+              <div class="points">Pts</div>
+            </div>
+            
+            <div class="standings-row" *ngFor="let standing of getRoundRobinStandings(); let i = index">
+              <div class="rank">{{ i + 1 }}</div>
+              <div class="player">{{ standing.playerName }}</div>
+              <div class="wins">{{ standing.wins }}</div>
+              <div class="losses">{{ standing.losses }}</div>
+              <div class="sets">{{ standing.setsWon }}-{{ standing.setsLost }}</div>
+              <div class="points">{{ standing.points }}</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="matches-section">
+          <h3>All Matches</h3>
+          <div class="round-robin-matches">
+            <div class="match-card" *ngFor="let match of bracket.rounds[0].matches">
+              <div class="match-players horizontal">
+                <div class="player-info">
+                  <span class="player-name">{{ getPlayerDisplayNameWithSeed(match.player1) }}</span>
+                  <span class="player-score">{{ match.score?.player1Score || '-' }}</span>
+                </div>
+                
+                <div class="vs-divider">vs</div>
+                
+                <div class="player-info">
+                  <span class="player-name">{{ getPlayerDisplayNameWithSeed(match.player2) }}</span>
+                  <span class="player-score">{{ match.score?.player2Score || '-' }}</span>
+                </div>
+              </div>
+              
+              <div class="match-status">
+                <span [class]="'status-' + match.status">{{ match.status | titlecase }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+
+  <div class="loading-state" *ngIf="!bracket">
+    <mat-icon class="loading-icon">sports_tennis</mat-icon>
+    <h2>{{ tournamentName || 'No Tournament Bracket' }}</h2>
+    <p *ngIf="!tournamentId">No tournament ID provided in URL parameters.</p>
+    <p *ngIf="tournamentId && !tournamentName">Loading bracket for tournament: {{ tournamentId }}</p>
+    <p *ngIf="tournamentName === 'No Bracket Generated'">No bracket has been generated for this tournament yet.</p>
+    <p *ngIf="tournamentName === 'Error Loading Bracket'">Error occurred while loading the bracket. Check console for details.</p>
+    <button mat-raised-button color="primary" routerLink="/tournaments" *ngIf="!tournamentId">
+      <mat-icon>add</mat-icon>
+      Go to Tournaments
+    </button>
+    <button mat-raised-button color="primary" [routerLink]="['/brackets/generate']" 
+            [queryParams]="{tournamentId: tournamentId}"
+            *ngIf="tournamentId && (tournamentName === 'No Bracket Generated' || tournamentName === 'Error Loading Bracket')">
+      <mat-icon>sports_tennis</mat-icon>
+      Generate Bracket
+    </button>
+  </div>
+</div>

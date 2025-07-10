@@ -1,0 +1,133 @@
+<div class="tournament-management-container">
+  <!-- Header -->
+  <div class="header-section">
+    <div class="header-content">
+      <div class="tournament-info">
+        <mat-icon class="tournament-icon">sports_tennis</mat-icon>
+        <div class="title-section">
+          <h1>{{ tournament?.name || 'Tournament Management' }}</h1>
+          <div class="tournament-details" *ngIf="tournament">
+            <span class="format-badge">{{ tournament.format }}</span>
+            <span class="game-type">{{ tournament.gameType }}</span>
+            <span class="game-format">{{ formatGameFormat(tournament.gameFormat) }}</span>
+            <span class="status" [class]="getStatusBadgeClass(tournament.status)">{{ formatTournamentStatus(tournament.status) }}</span>
+          </div>
+          
+          <!-- Live Status Indicators -->
+          <div class="live-status-indicators">
+            <div class="connection-status" [class]="getConnectionStatusColor()">
+              <mat-icon>{{ getConnectionStatusIcon() }}</mat-icon>
+              <span>{{ getConnectionStatusText() }}</span>
+            </div>
+            <div class="progress-indicator" *ngIf="totalMatches > 0">
+              <mat-progress-bar 
+                mode="determinate" 
+                [value]="tournamentProgress"
+                [color]="getTournamentProgressColor()">
+              </mat-progress-bar>
+              <span class="progress-text">{{ tournamentProgress.toFixed(0) }}% Complete</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <!-- Quick Stats Cards -->
+        <div class="quick-stats">
+          <div class="stat-card" (click)="viewBracket()">
+            <mat-icon>account_tree</mat-icon>
+            <div class="stat-info">
+              <span class="stat-number">{{ totalMatches }}</span>
+              <span class="stat-label">Total Matches</span>
+            </div>
+          </div>
+          
+          <div class="stat-card" (click)="viewLiveMatches()" 
+               [matBadge]="activeMatches" 
+               [matBadgeHidden]="activeMatches === 0"
+               [matBadgeColor]="getActiveMatchesBadgeColor()">
+            <mat-icon>play_circle_filled</mat-icon>
+            <div class="stat-info">
+              <span class="stat-number">{{ activeMatches }}</span>
+              <span class="stat-label">Live Now</span>
+            </div>
+          </div>
+          
+          <div class="stat-card" (click)="viewSchedule()">
+            <mat-icon>schedule</mat-icon>
+            <div class="stat-info">
+              <span class="stat-number">{{ scheduledMatches }}</span>
+              <span class="stat-label">Scheduled</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button mat-icon-button (click)="refreshTournamentData()" matTooltip="Refresh Data">
+            <mat-icon>refresh</mat-icon>
+          </button>
+          <button mat-button routerLink="/tournaments" class="back-btn">
+            <mat-icon>arrow_back</mat-icon>
+            Back to Tournaments
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabbed Content -->
+  <div class="management-tabs-container">
+    <mat-tab-group [(selectedIndex)]="selectedTabIndex" class="management-tabs" (selectedTabChange)="onTabChange($event)">
+      
+      <!-- Bracket Tree Tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon class="tab-icon">account_tree</mat-icon>
+          <span class="tab-label">Bracket Tree</span>
+        </ng-template>
+        
+        <div class="tab-content">
+          <app-bracket-view [tournamentId]="tournamentId"></app-bracket-view>
+        </div>
+      </mat-tab>
+
+      <!-- Schedule & Courts Tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon class="tab-icon">schedule</mat-icon>
+          <span class="tab-label">Schedule & Courts</span>
+        </ng-template>
+        
+        <div class="tab-content">
+          <app-schedule-view [tournamentId]="tournamentId"></app-schedule-view>
+        </div>
+      </mat-tab>
+
+      <!-- Live Matches Tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <div class="tab-label-content">
+            <div class="tab-main">
+              <mat-icon class="tab-icon">sports_tennis</mat-icon>
+              <span class="tab-label">Live Matches</span>
+            </div>
+            <div class="tab-indicators">
+              <mat-icon class="live-indicator" *ngIf="hasLiveMatches">fiber_manual_record</mat-icon>
+              <span class="live-count" *ngIf="activeMatches > 0">{{ activeMatches }}</span>
+              <mat-icon class="connection-indicator" 
+                       [class]="getConnectionStatusColor()"
+                       *ngIf="isWebSocketConnected">
+                wifi
+              </mat-icon>
+            </div>
+          </div>
+        </ng-template>
+        
+        <div class="tab-content">
+          <app-live-scoring [tournamentId]="tournamentId"></app-live-scoring>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </div>
+</div>

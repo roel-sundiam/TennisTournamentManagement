@@ -1,0 +1,99 @@
+<div class="schedule-view-container" *ngIf="!loading; else loadingTemplate">
+  <!-- Header -->
+  <div class="header-section">
+    <div class="title-section">
+      <h1>
+        <mat-icon class="header-icon">calendar_today</mat-icon>
+        Tournament Schedule
+      </h1>
+      <p class="subtitle">{{ tournament?.name || 'Loading...' }}</p>
+    </div>
+    <div class="header-actions">
+      <button mat-raised-button color="primary" (click)="navigateToScheduleBuilder()" class="action-btn">
+        <mat-icon>edit</mat-icon>
+        Edit Schedule
+      </button>
+    </div>
+  </div>
+
+  <!-- Schedule Stats -->
+  <div class="schedule-stats" *ngIf="scheduleData">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon-wrapper">
+          <mat-icon class="stat-icon">sports_tennis</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ scheduleData.totalMatches }}</div>
+          <div class="stat-label">Total Matches</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-wrapper">
+          <mat-icon class="stat-icon">schedule</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ scheduleData.scheduledMatches }}</div>
+          <div class="stat-label">Scheduled</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-wrapper">
+          <mat-icon class="stat-icon">timer</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ scheduleData.estimatedDuration }}h</div>
+          <div class="stat-label">Duration</div>
+        </div>
+      </div>
+      <div class="stat-card" [ngClass]="getConflictCardClass()">
+        <div class="stat-icon-wrapper">
+          <mat-icon class="stat-icon" [ngClass]="getConflictIconClass()">warning</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value" [ngClass]="getConflictValueClass()">{{ scheduleData.conflicts.length }}</div>
+          <div class="stat-label">Conflicts</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conflicts Alert -->
+  <div *ngIf="scheduleData && scheduleData.conflicts && scheduleData.conflicts.length > 0" class="conflicts-alert">
+    <div class="alert-card">
+      <div class="alert-header">
+        <div class="alert-icon">
+          <mat-icon>warning</mat-icon>
+        </div>
+        <div class="alert-content">
+          <h3>Scheduling Conflicts Detected</h3>
+          <p>{{ scheduleData.conflicts.length }} issues need attention</p>
+        </div>
+      </div>
+      <div class="conflicts-list">
+        <div *ngFor="let conflict of scheduleData.conflicts.slice(0, 3)" class="conflict-item">
+          <div class="conflict-chip" [ngClass]="getConflictChipClass(conflict.type)">
+            <mat-icon class="conflict-icon">{{ getConflictIcon(conflict.type) }}</mat-icon>
+            <span>{{ conflict.message }}</span>
+          </div>
+        </div>
+        <button *ngIf="scheduleData.conflicts.length > 3" mat-button color="warn" class="view-all-btn">
+          View All {{ scheduleData.conflicts.length }} Conflicts
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Matches View -->
+  <div class="matches-section">
+    <app-matches-view [tournamentId]="tournamentId"></app-matches-view>
+  </div>
+</div>
+
+<!-- Loading Template -->
+<ng-template #loadingTemplate>
+  <div class="loading-container">
+    <mat-spinner></mat-spinner>
+    <p>Loading tournament schedule...</p>
+  </div>
+</ng-template>

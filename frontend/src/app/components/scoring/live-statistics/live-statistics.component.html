@@ -1,0 +1,401 @@
+<div class="live-statistics-container">
+  <!-- Header Section -->
+  <div class="header-section">
+    <div class="title-section">
+      <h1>
+        <mat-icon>analytics</mat-icon>
+        Live Tournament Statistics
+      </h1>
+      <p class="subtitle">Real-time analytics and performance metrics</p>
+      <div class="header-actions">
+        <button mat-raised-button color="primary" (click)="refreshStatistics()" [disabled]="isLoading">
+          <mat-icon [class.spinning]="isLoading">refresh</mat-icon>
+          Refresh Stats
+        </button>
+        <button mat-raised-button color="accent" (click)="exportStatistics()" [disabled]="!statisticsData">
+          <mat-icon>file_download</mat-icon>
+          Export Data
+        </button>
+      </div>
+    </div>
+    
+    <div class="last-updated" *ngIf="statisticsData">
+      <mat-icon>schedule</mat-icon>
+      <span>Last updated: {{ getLastUpdated() }}</span>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-state" *ngIf="isLoading && !statisticsData">
+    <mat-icon class="loading-icon">analytics</mat-icon>
+    <h2>Loading Statistics...</h2>
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  </div>
+
+  <!-- Statistics Content -->
+  <div class="statistics-content" *ngIf="statisticsData">
+    
+    <!-- Tournament Overview Cards -->
+    <div class="overview-cards">
+      <div class="stat-card primary">
+        <div class="stat-icon">
+          <mat-icon>sports_tennis</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-number">{{ getTotalMatchesCount() }}</div>
+          <div class="stat-label">Total Matches</div>
+          <div class="stat-progress">
+            <mat-progress-bar mode="determinate" [value]="getCompletionProgress()"></mat-progress-bar>
+            <span class="progress-text">{{ formatPercentage(getCompletionProgress()) }} Complete</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card success">
+        <div class="stat-icon">
+          <mat-icon>check_circle</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-number">{{ getCompletedMatchesCount() }}</div>
+          <div class="stat-label">Completed</div>
+          <div class="stat-detail">{{ getAverageMatchDuration() }} avg</div>
+        </div>
+      </div>
+
+      <div class="stat-card warning">
+        <div class="stat-icon">
+          <mat-icon>play_circle_filled</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-number">{{ getActiveMatchesCount() }}</div>
+          <div class="stat-label">Live Matches</div>
+          <div class="stat-detail">{{ getCourtsInUse() }} courts in use</div>
+        </div>
+      </div>
+
+      <div class="stat-card info">
+        <div class="stat-icon">
+          <mat-icon>schedule</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-number">{{ getTotalPlayingTime() }}</div>
+          <div class="stat-label">Total Playing Time</div>
+          <div class="stat-detail">{{ getMatchesPerHour() }} matches/hour</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics Tabs -->
+    <mat-tab-group class="statistics-tabs">
+      
+      <!-- Tournament Overview Tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon>dashboard</mat-icon>
+          <span>Tournament Overview</span>
+        </ng-template>
+        <div class="tab-content">
+          
+          <!-- Key Metrics Grid -->
+          <div class="metrics-grid">
+            <mat-card class="metric-card">
+              <mat-card-header>
+                <mat-card-title>
+                  <mat-icon>trending_up</mat-icon>
+                  Tournament Progress
+                </mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="progress-display">
+                  <div class="progress-circle">
+                    <div class="progress-value">{{ formatPercentage(getCompletionProgress()) }}</div>
+                    <div class="progress-label">Complete</div>
+                  </div>
+                  <div class="progress-details">
+                    <div class="detail-item">
+                      <span class="detail-value">{{ getCompletedMatchesCount() }}</span>
+                      <span class="detail-label">Finished</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-value">{{ getActiveMatchesCount() }}</span>
+                      <span class="detail-label">In Progress</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-value">{{ getTotalMatchesCount() - getCompletedMatchesCount() - getActiveMatchesCount() }}</span>
+                      <span class="detail-label">Remaining</span>
+                    </div>
+                  </div>
+                </div>
+              </mat-card-content>
+            </mat-card>
+
+            <mat-card class="metric-card">
+              <mat-card-header>
+                <mat-card-title>
+                  <mat-icon>access_time</mat-icon>
+                  Time Analytics
+                </mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="time-metrics">
+                  <div class="time-item">
+                    <div class="time-value">{{ getAverageMatchDuration() }}</div>
+                    <div class="time-label">Average Match Duration</div>
+                  </div>
+                  <div class="time-item">
+                    <div class="time-value">{{ getTotalPlayingTime() }}</div>
+                    <div class="time-label">Total Playing Time</div>
+                  </div>
+                  <div class="time-item">
+                    <div class="time-value">{{ getPeakHour() }}</div>
+                    <div class="time-label">Peak Hour</div>
+                  </div>
+                </div>
+              </mat-card-content>
+            </mat-card>
+
+            <mat-card class="metric-card">
+              <mat-card-header>
+                <mat-card-title>
+                  <mat-icon>sports</mat-icon>
+                  Game Formats
+                </mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="format-distribution" *ngIf="statisticsData">
+                  <div class="format-item" *ngFor="let format of statisticsData.trends.gameFormatDistribution">
+                    <div class="format-header">
+                      <span class="format-name">{{ formatGameFormat(format.format) }}</span>
+                      <span class="format-percentage">{{ formatPercentage(format.percentage) }}</span>
+                    </div>
+                    <mat-progress-bar mode="determinate" [value]="format.percentage"></mat-progress-bar>
+                    <div class="format-count">{{ format.count }} matches</div>
+                  </div>
+                </div>
+              </mat-card-content>
+            </mat-card>
+          </div>
+        </div>
+      </mat-tab>
+
+      <!-- Player Statistics Tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon>people</mat-icon>
+          <span>Player Stats</span>
+        </ng-template>
+        <div class="tab-content">
+          <mat-card class="table-card">
+            <mat-card-header>
+              <mat-card-title>Top Performers</mat-card-title>
+              <mat-card-subtitle>Ranked by win percentage</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              <table mat-table [dataSource]="getTopPlayers()" class="players-table">
+                <ng-container matColumnDef="rank">
+                  <th mat-header-cell *matHeaderCellDef>Rank</th>
+                  <td mat-cell *matCellDef="let player; let i = index">{{ getPlayerRank(i) }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="playerName">
+                  <th mat-header-cell *matHeaderCellDef>Player Name</th>
+                  <td mat-cell *matCellDef="let player">{{ player.playerName }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="matchesPlayed">
+                  <th mat-header-cell *matHeaderCellDef>Matches</th>
+                  <td mat-cell *matCellDef="let player">{{ player.matchesPlayed }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="winPercentage">
+                  <th mat-header-cell *matHeaderCellDef>Win Rate</th>
+                  <td mat-cell *matCellDef="let player">
+                    <div class="win-rate-cell">
+                      <span class="win-percentage">{{ getPlayerWinRate(player) }}</span>
+                      <div class="win-bar">
+                        <mat-progress-bar mode="determinate" [value]="player.winPercentage"></mat-progress-bar>
+                      </div>
+                    </div>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="gamesWon">
+                  <th mat-header-cell *matHeaderCellDef>Games Won</th>
+                  <td mat-cell *matCellDef="let player">{{ player.gamesWon }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="setsWon">
+                  <th mat-header-cell *matHeaderCellDef>Sets Won</th>
+                  <td mat-cell *matCellDef="let player">{{ player.setsWon }}</td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="playerColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: playerColumns;" 
+                    [class.winner-row]="row.winPercentage >= 70"></tr>
+              </table>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <!-- Court Utilization Tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon>location_on</mat-icon>
+          <span>Court Usage</span>
+        </ng-template>
+        <div class="tab-content">
+          <mat-card class="table-card">
+            <mat-card-header>
+              <mat-card-title>Court Utilization</mat-card-title>
+              <mat-card-subtitle>Usage statistics by court</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              <table mat-table [dataSource]="getCourtUtilization()" class="courts-table">
+                <ng-container matColumnDef="courtName">
+                  <th mat-header-cell *matHeaderCellDef>Court</th>
+                  <td mat-cell *matCellDef="let court">{{ court.courtName }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="matchesPlayed">
+                  <th mat-header-cell *matHeaderCellDef>Matches</th>
+                  <td mat-cell *matCellDef="let court">{{ court.matchesPlayed }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="utilization">
+                  <th mat-header-cell *matHeaderCellDef>Utilization</th>
+                  <td mat-cell *matCellDef="let court">
+                    <div class="utilization-cell">
+                      <span class="utilization-percentage">{{ getCourtUtilizationPercentage(court) }}</span>
+                      <div class="utilization-bar">
+                        <mat-progress-bar mode="determinate" [value]="court.utilization"></mat-progress-bar>
+                      </div>
+                    </div>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="currentMatch">
+                  <th mat-header-cell *matHeaderCellDef>Current Match</th>
+                  <td mat-cell *matCellDef="let court">
+                    <div class="current-match-cell" [class.in-use]="isCourtInUse(court)">
+                      <mat-icon *ngIf="isCourtInUse(court)" class="live-icon">play_circle_filled</mat-icon>
+                      <mat-icon *ngIf="!isCourtInUse(court)" class="available-icon">check_circle</mat-icon>
+                      <span>{{ getCurrentMatchDisplay(court) }}</span>
+                    </div>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="totalTime">
+                  <th mat-header-cell *matHeaderCellDef>Total Time</th>
+                  <td mat-cell *matCellDef="let court">{{ formatDuration(court.totalPlayingTime) }}</td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="courtColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: courtColumns;" 
+                    [class.high-utilization]="row.utilization >= 80"></tr>
+              </table>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <!-- Trends & Analytics Tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon>show_chart</mat-icon>
+          <span>Trends</span>
+        </ng-template>
+        <div class="tab-content">
+          <div class="trends-grid">
+            
+            <!-- Hourly Distribution Card -->
+            <mat-card class="trend-card">
+              <mat-card-header>
+                <mat-card-title>
+                  <mat-icon>schedule</mat-icon>
+                  Hourly Match Distribution
+                </mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="hourly-chart" *ngIf="statisticsData">
+                  <div class="chart-placeholder">
+                    <mat-icon>bar_chart</mat-icon>
+                    <p>Hourly distribution chart would be displayed here</p>
+                    <div class="peak-hour-info">
+                      <strong>Peak Hour: {{ getPeakHour() }}</strong>
+                    </div>
+                  </div>
+                </div>
+              </mat-card-content>
+            </mat-card>
+
+            <!-- Daily Completion Trend -->
+            <mat-card class="trend-card">
+              <mat-card-header>
+                <mat-card-title>
+                  <mat-icon>trending_up</mat-icon>
+                  Daily Completion Trend
+                </mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="daily-trend" *ngIf="statisticsData">
+                  <div class="chart-placeholder">
+                    <mat-icon>show_chart</mat-icon>
+                    <p>Daily completion trend chart would be displayed here</p>
+                    <div class="trend-summary">
+                      <div class="summary-item">
+                        <span class="summary-label">Most Popular Format:</span>
+                        <span class="summary-value">{{ getMostPopularFormat() }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </mat-card-content>
+            </mat-card>
+
+            <!-- Match Duration Trends -->
+            <mat-card class="trend-card full-width">
+              <mat-card-header>
+                <mat-card-title>
+                  <mat-icon>access_time</mat-icon>
+                  Match Duration Analytics
+                </mat-card-title>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="duration-analytics" *ngIf="statisticsData">
+                  <div class="chart-placeholder">
+                    <mat-icon>timeline</mat-icon>
+                    <p>Match duration trend chart would be displayed here</p>
+                    <div class="duration-stats">
+                      <div class="stat-item">
+                        <span class="stat-label">Average Duration:</span>
+                        <span class="stat-value">{{ getAverageMatchDuration() }}</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-label">Completion Rate:</span>
+                        <span class="stat-value">{{ getMatchesPerHour() }} matches/hour</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </mat-card-content>
+            </mat-card>
+
+          </div>
+        </div>
+      </mat-tab>
+
+    </mat-tab-group>
+  </div>
+
+  <!-- No Data State -->
+  <div class="no-data-state" *ngIf="!isLoading && !statisticsData">
+    <mat-icon class="large-icon">analytics</mat-icon>
+    <h2>No Statistics Available</h2>
+    <p>Statistics will be displayed once matches are started and data is collected.</p>
+    <button mat-raised-button color="primary" (click)="refreshStatistics()">
+      <mat-icon>refresh</mat-icon>
+      Try Again
+    </button>
+  </div>
+</div>

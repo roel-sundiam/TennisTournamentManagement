@@ -1,0 +1,154 @@
+<div class="tournament-list-container">
+  <div class="header-section">
+    <div class="title-section">
+      <h1>Your Tournaments</h1>
+      <p class="subtitle">Manage and track your tennis tournaments</p>
+    </div>
+    
+    <button mat-raised-button color="primary" routerLink="/tournaments/create" class="create-btn">
+      <mat-icon>add</mat-icon>
+      CREATE A TOURNAMENT
+    </button>
+  </div>
+
+  <!-- Status Toolbar -->
+  <div class="status-toolbar">
+    <div class="status-filters">
+      <button 
+        *ngFor="let filter of statusFilters" 
+        [class.active]="selectedFilter === filter.value"
+        (click)="setFilter(filter.value)"
+        class="status-filter-btn">
+        <mat-icon>{{ filter.icon }}</mat-icon>
+        <span class="filter-label">{{ filter.label }}</span>
+        <span class="filter-badge">{{ getStatusCount(filter.value) }}</span>
+      </button>
+    </div>
+    
+    <div class="tournament-count">
+      <mat-icon class="count-icon">insights</mat-icon>
+      <span>{{ filteredTournaments.length }} tournament(s) displayed</span>
+    </div>
+  </div>
+
+  <div class="tournaments-list">
+    <div class="tournament-item" *ngFor="let tournament of filteredTournaments" 
+         (click)="openTournamentSidebar(tournament)">
+      
+      <div class="tournament-icon">
+        <mat-icon>emoji_events</mat-icon>
+      </div>
+      
+      <div class="tournament-content">
+        <div class="tournament-header">
+          <h3 class="tournament-title">{{ tournament.name }}</h3>
+          <div class="tournament-subtitle">{{ tournament.gameType | titlecase }} {{ getFormatDisplay(tournament.format) }}</div>
+        </div>
+      </div>
+      
+      <div class="tournament-meta">
+        <div class="player-count">
+          <mat-icon>groups</mat-icon>
+          <span>{{ tournament.currentPlayers }}</span>
+        </div>
+        <div class="tournament-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" 
+                 [style.width.%]="(tournament.currentPlayers / tournament.maxPlayers) * 100">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+
+  <div class="empty-state" *ngIf="filteredTournaments.length === 0">
+    <mat-icon class="empty-icon">emoji_events</mat-icon>
+    <h2>No tournaments found</h2>
+    <p>Create your first tournament to get started!</p>
+    <button mat-raised-button color="primary" routerLink="/tournaments/create">
+      <mat-icon>add</mat-icon>
+      Create Tournament
+    </button>
+  </div>
+
+  <!-- Professional Tournament Management Sidebar -->
+  <div class="sidebar-overlay" *ngIf="sidebarOpen" (click)="closeSidebar()"></div>
+  <div class="tournament-sidebar" [class.open]="sidebarOpen" *ngIf="selectedTournament">
+    
+    <!-- Sidebar Header -->
+    <div class="sidebar-header">
+      <div class="tournament-info">
+        <div class="tournament-icon">
+          <mat-icon>emoji_events</mat-icon>
+        </div>
+        <div class="tournament-details">
+          <h2>{{ selectedTournament.name }}</h2>
+          <p>{{ selectedTournament.venue }}</p>
+        </div>
+      </div>
+      <button mat-icon-button (click)="closeSidebar()" class="close-btn">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <!-- Tournament Stats -->
+    <div class="tournament-stats">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <mat-icon>groups</mat-icon>
+          <div class="stat-content">
+            <span class="stat-number">{{ selectedTournament.currentPlayers }}/{{ selectedTournament.maxPlayers }}</span>
+            <span class="stat-label">Players</span>
+          </div>
+        </div>
+        <div class="stat-item">
+          <mat-icon>sports_tennis</mat-icon>
+          <div class="stat-content">
+            <span class="stat-number">{{ selectedTournament.gameType | titlecase }}</span>
+            <span class="stat-label">Game Type</span>
+          </div>
+        </div>
+        <div class="stat-item">
+          <mat-icon>emoji_events</mat-icon>
+          <div class="stat-content">
+            <span class="stat-number">${{ selectedTournament.prizePool | number }}</span>
+            <span class="stat-label">Prize Pool</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Items -->
+    <div class="sidebar-content">
+      <h3>Tournament Management</h3>
+      <div class="action-list">
+        <div *ngFor="let action of getSidebarActions()"
+             class="action-item"
+             [routerLink]="action.route"
+             (click)="handleActionClick(action)">
+          <div class="action-icon">
+            <mat-icon>{{ action.icon }}</mat-icon>
+          </div>
+          <div class="action-content">
+            <div class="action-label">{{ action.label }}</div>
+            <div class="action-description">{{ action.description }}</div>
+          </div>
+          <mat-icon class="action-arrow">chevron_right</mat-icon>
+        </div>
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="danger-zone">
+        <h4>Danger Zone</h4>
+        <button mat-stroked-button color="warn" 
+                (click)="deleteTournament(selectedTournament._id!, selectedTournament.name); closeSidebar()"
+                class="delete-action">
+          <mat-icon>delete</mat-icon>
+          Delete Tournament
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

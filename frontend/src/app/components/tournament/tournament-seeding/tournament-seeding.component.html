@@ -1,0 +1,151 @@
+<div class="seeding-container">
+  <div class="header-section">
+    <div class="title-section">
+      <h1>
+        <mat-icon>reorder</mat-icon>
+        Tournament Seeding
+      </h1>
+      <p class="subtitle" *ngIf="tournament">{{ tournament.name }}</p>
+      <p class="description">Drag players to reorder their seeding positions</p>
+    </div>
+    <div class="action-buttons">
+      <button mat-raised-button color="primary" (click)="saveSeeding()" [disabled]="!hasChanges" class="save-btn">
+        <mat-icon>save</mat-icon>
+        Save Seeding
+      </button>
+    </div>
+  </div>
+
+  <div class="seeding-content" *ngIf="players.length > 0; else emptyState">
+    <div class="seeding-card">
+      <div class="card-header">
+        <h2>
+          <mat-icon>reorder</mat-icon>
+          Player Seeding Order
+        </h2>
+        <p class="card-subtitle">{{ players.length }} players registered</p>
+      </div>
+
+      <div class="card-content">
+        <div class="seeding-instructions">
+          <mat-icon>info</mat-icon>
+          <span>Drag the handle (≡) to reorder players. Higher seeds get better bracket positions.</span>
+        </div>
+
+        <div 
+          cdkDropList 
+          class="seeding-list" 
+          (cdkDropListDropped)="drop($event)"
+          [cdkDropListData]="players"
+        >
+          <div 
+            class="seeding-item" 
+            *ngFor="let player of players; let i = index"
+            cdkDrag
+            [cdkDragData]="player"
+            [class.dragging]="false"
+          >
+            <div class="seed-number">
+              <mat-icon class="seed-icon">star</mat-icon>
+              <span class="seed-text">#{{ i + 1 }}</span>
+            </div>
+
+            <div class="player-info">
+              <div class="player-avatar">
+                <mat-icon>person</mat-icon>
+              </div>
+              <div class="player-details">
+                <div class="player-name">{{ player.name }}</div>
+                <div class="player-meta">
+                  <span class="skill-level">{{ player.skillLevel | titlecase }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="player-badges">
+              <mat-chip [color]="getSkillLevelColor(player.skillLevel)" selected>
+                {{ player.skillLevel | titlecase }}
+              </mat-chip>
+              <mat-chip *ngIf="i + 1 !== player.seedPosition" color="accent" selected>
+                Changed
+              </mat-chip>
+            </div>
+
+            <div class="drag-handle" cdkDragHandle>
+              <mat-icon>drag_indicator</mat-icon>
+            </div>
+
+            <!-- Drag preview -->
+            <div class="drag-preview" *cdkDragPreview>
+              <div class="preview-content">
+                <div class="preview-seed">#{{ i + 1 }}</div>
+                <div class="preview-name">{{ player.name }}</div>
+              </div>
+            </div>
+
+            <!-- Drag placeholder -->
+            <div class="drag-placeholder" *cdkDragPlaceholder>
+              <div class="placeholder-content">
+                <mat-icon>more_horiz</mat-icon>
+                <span>Drop here</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-footer" *ngIf="hasChanges">
+        <div class="changes-notice">
+          <mat-icon color="accent">info</mat-icon>
+          <span>You have unsaved seeding changes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seeding Summary -->
+    <div class="summary-card">
+      <div class="card-header">
+        <h2>
+          <mat-icon>leaderboard</mat-icon>
+          Seeding Summary
+        </h2>
+      </div>
+      <div class="card-content">
+        <div class="summary-stats">
+          <div class="stat-item">
+            <span class="stat-label">Total Players:</span>
+            <span class="stat-value">{{ players.length }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Changes Made:</span>
+            <span class="stat-value">{{ getChangesCount() }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Tournament Format:</span>
+            <span class="stat-value">{{ tournament?.format | titlecase }}</span>
+          </div>
+        </div>
+        
+        <div class="recent-changes" *ngIf="recentChanges.length > 0">
+          <h3>Recent Changes:</h3>
+          <div class="change-item" *ngFor="let change of recentChanges">
+            <mat-icon>swap_horiz</mat-icon>
+            <span>{{ change.playerName }} moved from #{{ change.oldPosition }} to #{{ change.newPosition }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #emptyState>
+    <div class="empty-state">
+      <mat-icon class="empty-icon">person_add</mat-icon>
+      <h2>No Players Registered</h2>
+      <p>Add players to this tournament before setting up seeding</p>
+      <button mat-raised-button color="primary" routerLink="/players">
+        <mat-icon>group_add</mat-icon>
+        Manage Players
+      </button>
+    </div>
+  </ng-template>
+</div>

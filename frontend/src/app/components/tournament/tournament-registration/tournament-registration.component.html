@@ -1,0 +1,118 @@
+<div class="registration-container">
+  <!-- Header Section -->
+  <div class="header-section">
+    <div class="title-section">
+      <h1>
+        <mat-icon>how_to_reg</mat-icon>
+        Tournament Registration
+      </h1>
+      <p class="subtitle" *ngIf="tournament">Register players for: {{ tournament.name }}</p>
+    </div>
+    
+    <button mat-button (click)="onCancel()" class="back-btn">
+      <mat-icon>arrow_back</mat-icon>
+      Back to Tournaments
+    </button>
+  </div>
+
+  <!-- Tournament Info Card -->
+  <div class="tournament-info-card" *ngIf="tournament">
+    <div class="info-grid">
+      <div class="info-item">
+        <mat-icon>event</mat-icon>
+        <div class="info-content">
+          <span class="info-label">Tournament Dates</span>
+          <span class="info-value">{{ tournament.startDate | date:'mediumDate' }} - {{ tournament.endDate | date:'mediumDate' }}</span>
+        </div>
+      </div>
+      <div class="info-item">
+        <mat-icon>sports</mat-icon>
+        <div class="info-content">
+          <span class="info-label">Format & Type</span>
+          <span class="info-value">{{ tournament.format | titlecase }} - {{ tournament.gameType | titlecase }}</span>
+        </div>
+      </div>
+      <div class="info-item">
+        <mat-icon>people</mat-icon>
+        <div class="info-content">
+          <span class="info-label">Player Registration</span>
+          <span class="info-value">{{ selectedPlayersCount }}/{{ tournament.maxPlayers }} players</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Players Section -->
+  <div class="players-section">
+    <div class="section-header">
+      <h2>Available Players</h2>
+      <p class="section-subtitle">Select players to register for this tournament</p>
+    </div>
+    
+    <!-- Show players when form is ready -->
+    <div *ngIf="isFormReady && players.length > 0">
+      <form [formGroup]="registrationForm">
+        <div class="players-list">
+          <div class="player-item" *ngFor="let player of players; let i = index; trackBy: trackByPlayerId">
+            <mat-checkbox 
+              [formControlName]="'player_' + i"
+              (change)="onPlayerSelectionChange()"
+              class="player-checkbox">
+            </mat-checkbox>
+            
+            <div class="player-content">
+              <div class="player-header">
+                <h3 class="player-name">{{ player.name }}</h3>
+                <div class="player-chips">
+                  <mat-chip [color]="getSkillLevelColor(player.skillLevel)" selected>
+                    {{ player.skillLevel | titlecase }}
+                  </mat-chip>
+                </div>
+              </div>
+              
+              <div class="player-contact" *ngIf="player.email">
+                <mat-icon>email</mat-icon>
+                <span>{{ player.email }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+    
+    <!-- Form not ready fallback -->
+    <div *ngIf="!isFormReady && players.length > 0" class="form-error">
+      <mat-icon>warning</mat-icon>
+      <h3>Form Not Ready</h3>
+      <p>There was an issue loading the registration form. Please try rebuilding it.</p>
+      <button mat-raised-button color="primary" (click)="rebuildForm()">
+        <mat-icon>refresh</mat-icon>
+        Rebuild Form
+      </button>
+    </div>
+
+    <!-- No players state -->
+    <div class="empty-state" *ngIf="players.length === 0">
+      <mat-icon class="empty-icon">person_off</mat-icon>
+      <h2>No Players Available</h2>
+      <p>Create some players first before registering them for tournaments.</p>
+      <p class="help-text">Go to the Players menu to add players to the system.</p>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="actions-section" *ngIf="isFormReady && players.length > 0">
+    <button mat-button (click)="onCancel()" class="cancel-btn">
+      <mat-icon>cancel</mat-icon>
+      Cancel
+    </button>
+    <button 
+      mat-raised-button 
+      color="primary" 
+      (click)="onRegisterPlayers()"
+      class="register-btn">
+      <mat-icon>how_to_reg</mat-icon>
+      Update Registration ({{ selectedPlayersCount }} selected)
+    </button>
+  </div>
+</div>
