@@ -108,11 +108,6 @@ export class SchedulingService {
       .pipe(map(response => response.data));
   }
 
-  // Reschedule a match
-  rescheduleMatch(matchId: string, newTimeSlotId: string): Observable<void> {
-    return this.http.put<{success: boolean}>(`${this.apiUrl}/reschedule/${matchId}`, { timeSlotId: newTimeSlotId })
-      .pipe(map(() => void 0));
-  }
 
   // Check for scheduling conflicts
   checkConflicts(tournamentId: string): Observable<ScheduleConflict[]> {
@@ -195,5 +190,29 @@ export class SchedulingService {
       minimumCourts,
       recommendedStartTime: '09:00'
     };
+  }
+
+  // Fix unscheduled matches by assigning them to available time slots
+  fixSchedule(tournamentId: string): Observable<any> {
+    console.log('🔧 Calling fix schedule API for tournament:', tournamentId);
+    return this.http.post<any>(`${this.apiUrl}/fix-schedule`, { tournamentId })
+      .pipe(
+        catchError(error => {
+          console.error('❌ Fix schedule API error:', error);
+          throw error;
+        })
+      );
+  }
+
+  // Reschedule a match to a different time slot
+  rescheduleMatch(matchId: string, newTimeSlotId: string): Observable<any> {
+    console.log('🔄 Rescheduling match:', matchId, 'to time slot:', newTimeSlotId);
+    return this.http.put<any>(`${this.apiUrl}/matches/${matchId}/reschedule`, { newTimeSlotId })
+      .pipe(
+        catchError(error => {
+          console.error('❌ Reschedule match API error:', error);
+          throw error;
+        })
+      );
   }
 }

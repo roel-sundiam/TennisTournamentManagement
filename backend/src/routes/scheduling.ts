@@ -10,6 +10,107 @@ import Bracket from '../models/Bracket';
 
 const router = express.Router();
 
+// @desc    Fix unscheduled matches
+// @route   POST /api/scheduling/fix-schedule
+// @access  Private
+router.post('/fix-schedule', asyncHandler(async (req: Request, res: Response) => {
+  console.log('🔧 Fix schedule request:', req.body);
+  
+  const { tournamentId } = req.body;
+  
+  if (!tournamentId) {
+    res.status(400).json({
+      success: false,
+      message: 'Tournament ID is required'
+    });
+    return;
+  }
+  
+  try {
+    console.log('🔧 Fixing schedule for tournament:', tournamentId);
+    
+    // Get unscheduled matches
+    const unscheduledMatches = await Match.find({ 
+      tournament: tournamentId,
+      scheduledDateTime: { $exists: false }
+    }).sort({ round: 1, matchNumber: 1 });
+    
+    console.log(`📋 Found ${unscheduledMatches.length} unscheduled matches`);
+    
+    // Get available time slots
+    const availableTimeSlots = await TimeSlot.find({
+      tournament: tournamentId,
+      status: 'available'
+    }).sort({ startTime: 1 });
+    
+    console.log(`⏰ Found ${availableTimeSlots.length} available time slots`);
+    
+    if (unscheduledMatches.length === 0) {
+      res.status(200).json({
+        success: true,
+        message: 'All matches are already scheduled',
+        data: { scheduledMatches: 0 }
+      });
+      return;
+    }
+    
+    if (availableTimeSlots.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'No available time slots found'
+      });
+      return;
+    }
+    
+    // Schedule matches to time slots
+    let scheduledCount = 0;
+    const maxSchedulable = Math.min(unscheduledMatches.length, availableTimeSlots.length);
+    
+    for (let i = 0; i < maxSchedulable; i++) {
+      const match = unscheduledMatches[i];
+      const timeSlot = availableTimeSlots[i];
+      
+      try {
+        // Update match with scheduling information
+        await Match.findByIdAndUpdate(match._id, {
+          scheduledTimeSlot: timeSlot._id,
+          scheduledDateTime: timeSlot.startTime,
+          court: timeSlot.court || 'Court 1'
+        });
+        
+        // Mark time slot as booked
+        await TimeSlot.findByIdAndUpdate(timeSlot._id, {
+          status: 'booked',
+          match: match._id
+        });
+        
+        scheduledCount++;
+        console.log(`✅ Scheduled Match ${match.matchNumber} to ${timeSlot.startTime}`);
+      } catch (error) {
+        console.error(`❌ Error scheduling match ${match.matchNumber}:`, error);
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: `Successfully scheduled ${scheduledCount} matches`,
+      data: {
+        scheduledMatches: scheduledCount,
+        totalMatches: unscheduledMatches.length,
+        availableTimeSlots: availableTimeSlots.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fixing schedule:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix schedule',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}));
+
 // @desc    Generate tournament schedule
 // @route   POST /api/scheduling/generate
 // @access  Private
@@ -197,10 +298,14 @@ router.get('/builder', (req: Request, res: Response) => {
   });
 });
 
+// @desc    Fix unscheduled matches by assigning them to available time slots
+// @route   POST /api/scheduling/:tournamentId/fix-schedule
+// @access  Public
+
 // @desc    Get tournament schedule
 // @route   GET /api/scheduling/:tournamentId
 // @access  Public
-router.get('/:tournamentId', async (req: Request, res: Response) => {
+router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response) => {
   try {
     console.log('🚨 DEBUGGING: Scheduling route hit with params:', req.params);
     console.log('🚨 DEBUGGING: Full URL:', req.url);
@@ -214,10 +319,11 @@ router.get('/:tournamentId', async (req: Request, res: Response) => {
     // CRITICAL: Stop execution immediately if tournament ID is "builder"
     if (tournamentId === 'builder') {
       console.log('🛑 BLOCKED: Tournament ID is "builder", returning 400');
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Invalid tournament ID: cannot be "builder"'
       });
+      return;
     }
     
     // Validate that tournamentId is a valid MongoDB ObjectId
@@ -226,10 +332,11 @@ router.get('/:tournamentId', async (req: Request, res: Response) => {
     
     if (!isValid) {
       console.log('❌ Invalid tournament ID format, returning 400');
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Invalid tournament ID format'
       });
+      return;
     }
     
     console.log('✅ Tournament ID passed validation, proceeding with database query');
@@ -286,7 +393,7 @@ router.get('/:tournamentId', async (req: Request, res: Response) => {
       message: 'Internal server error'
     });
   }
-});
+}));
 
 // @desc    Block invalid "builder" tournament ID for matches
 // @route   GET /api/scheduling/builder/matches
@@ -302,7 +409,7 @@ router.get('/builder/matches', (req: Request, res: Response) => {
 // @desc    Get scheduled matches for a tournament
 // @route   GET /api/scheduling/:tournamentId/matches
 // @access  Public
-router.get('/:tournamentId/matches', async (req: Request, res: Response) => {
+router.get('/:tournamentId/matches', asyncHandler(async (req: Request, res: Response) => {
   try {
     const tournamentId = req.params.tournamentId;
     
@@ -311,18 +418,20 @@ router.get('/:tournamentId/matches', async (req: Request, res: Response) => {
     // CRITICAL: Stop execution immediately if tournament ID is "builder"
     if (tournamentId === 'builder') {
       console.log('🛑 BLOCKED: Tournament ID is "builder" for matches endpoint, returning 400');
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Invalid tournament ID: cannot be "builder"'
       });
+      return;
     }
     
     // Validate that tournamentId is a valid MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Invalid tournament ID format'
       });
+      return;
     }
   
   // Get all matches for this tournament with populated team and time slot data
@@ -345,7 +454,7 @@ router.get('/:tournamentId/matches', async (req: Request, res: Response) => {
       message: 'Internal server error'
     });
   }
-});
+}));
 
 // @desc    Reschedule a match to a different time slot
 // @route   PUT /api/scheduling/matches/:matchId/reschedule
@@ -376,14 +485,38 @@ router.put('/matches/:matchId/reschedule', asyncHandler(async (req: Request, res
     return;
   }
   
-  // Check if the new time slot is available
-  if (newTimeSlot.status !== 'available') {
+  // Check if the new time slot is available or if it's the same match (reordering)
+  // Allow rescheduling if:
+  // 1. Time slot is available, OR
+  // 2. Time slot is booked but has no match assigned (orphaned booking), OR 
+  // 3. Time slot is booked by the same match we're trying to reschedule
+  const isSlotAvailable = newTimeSlot.status === 'available';
+  const isOrphanedBooking = newTimeSlot.status === 'booked' && !newTimeSlot.match;
+  const isSameMatch = newTimeSlot.match?.toString() === matchId;
+  
+  if (!isSlotAvailable && !isOrphanedBooking && !isSameMatch) {
+    console.log('❌ Time slot not available:', {
+      slotStatus: newTimeSlot.status,
+      slotMatch: newTimeSlot.match,
+      requestedMatch: matchId,
+      isSlotAvailable,
+      isOrphanedBooking,
+      isSameMatch
+    });
     res.status(400).json({
       success: false,
-      message: 'Time slot is not available'
+      message: `Time slot is already occupied by another match. Please choose an available time slot.`
     });
     return;
   }
+  
+  console.log('✅ Time slot is available for rescheduling:', {
+    slotId: newTimeSlotId,
+    slotStatus: newTimeSlot.status,
+    isSlotAvailable,
+    isOrphanedBooking,
+    isSameMatch
+  });
   
   // Free up the old time slot if it exists
   if (match.scheduledTimeSlot) {

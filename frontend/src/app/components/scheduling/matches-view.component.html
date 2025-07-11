@@ -4,6 +4,10 @@
     <div class="header-content">
       <h2>Tournament Matches</h2>
       <div class="header-actions">
+        <button mat-raised-button color="warn" (click)="fixSchedule()" *ngIf="hasUnscheduledMatches()">
+          <mat-icon>build</mat-icon>
+          Fix Schedule
+        </button>
         <button mat-raised-button color="primary" (click)="refreshMatches()">
           <mat-icon>refresh</mat-icon>
           Refresh
@@ -218,9 +222,11 @@
                      [class.available]="timeSlot.status === 'available'"
                      [class.booked]="timeSlot.status === 'booked'"
                      cdkDropList
+                     [id]="'drop-' + timeSlot._id"
                      [cdkDropListData]="timeSlot"
                      [cdkDropListDisabled]="!isDragDropEnabled"
                      (cdkDropListDropped)="onMatchDrop($event)"
+                     [cdkDropListConnectedTo]="connectedDropLists"
                      cdkDropListSortingDisabled>
                   
                   <div class="time-slot-header">
@@ -235,7 +241,9 @@
                          class="match-card compact draggable-match-card"
                          cdkDrag
                          [cdkDragData]="match"
-                         [cdkDragDisabled]="!isDragDropEnabled">
+                         [cdkDragDisabled]="!isDragDropEnabled"
+                         (cdkDragStarted)="onDragStarted($event)"
+                         (cdkDragEnded)="onDragEnded($event)">
                       
                       <div class="match-header">
                         <span class="match-title">R{{ match.round }}M{{ match.matchNumber }}</span>

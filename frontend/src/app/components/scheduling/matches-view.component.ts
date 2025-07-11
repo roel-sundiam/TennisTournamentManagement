@@ -44,7 +44,7 @@ export class MatchesViewComponent implements OnInit {
   connectedDropLists: string[] = [];
   isLoading = false;
   selectedViewIndex = 0;
-  isDragDropEnabled = true;
+  isDragDropEnabled = false; // Start with drag & drop disabled
 
   displayedColumns: string[] = ['match', 'teams', 'schedule', 'court', 'status', 'actions'];
 
@@ -150,6 +150,10 @@ export class MatchesViewComponent implements OnInit {
         new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       )
     }));
+    
+    // Set up connected drop lists for drag & drop
+    this.connectedDropLists = this.availableTimeSlots.map(slot => 'drop-' + slot._id!).filter(id => id);
+    console.log('🔗 Connected drop lists:', this.connectedDropLists.length);
   }
 
   // View methods
@@ -292,30 +296,136 @@ export class MatchesViewComponent implements OnInit {
   }
 
   goToScheduleBuilder(): void {
-    this.router.navigate(['/schedule/builder']);
+    if (this.tournamentId) {
+      this.router.navigate(['/schedule/builder'], {
+        queryParams: { tournament: this.tournamentId }
+      });
+    } else {
+      this.router.navigate(['/schedule/builder']);
+    }
   }
 
   // Drag & Drop methods
   toggleDragDrop(): void {
     this.isDragDropEnabled = !this.isDragDropEnabled;
+    console.log('🔄 Drag & Drop toggled:', this.isDragDropEnabled ? 'ENABLED' : 'DISABLED');
   }
 
-  onMatchDrop(event: any): void {
-    // Implementation for drag & drop
-    console.log('Match dropped:', event);
+  onDragStarted(event: any): void {
+    console.log('🏁 Drag started:', event);
+  }
+
+  onDragEnded(event: any): void {
+    console.log('🏁 Drag ended:', event);
+  }
+
+  onMatchDrop(event: CdkDragDrop<TimeSlot>): void {
+    console.log('🔍 Match drop event triggered');
+    console.log('🔍 Previous container:', event.previousContainer.data);
+    console.log('🔍 Current container:', event.container.data);
+    console.log('🔍 Dragged item:', event.item.data);
+    
+    if (event.previousContainer === event.container) {
+      console.log('🔍 Same container - no reschedule needed');
+      return;
+    }
+    
+    // Move between different time slots
+    const match = event.item.data as ScheduledMatch;
+    const targetTimeSlot = event.container.data as TimeSlot;
+    
+    console.log('🔍 Attempting to reschedule match:', match._id, 'to slot:', targetTimeSlot._id);
+    console.log('🔍 Match data:', match);
+    console.log('🔍 Target time slot data:', targetTimeSlot);
+    
+    // Call backend to reschedule the match
+    this.schedulingService.rescheduleMatch(match._id, targetTimeSlot._id!).subscribe({
+      next: (response) => {
+        console.log('✅ Match rescheduled successfully:', response);
+        
+        // Update local data
+        match.scheduledDateTime = new Date(targetTimeSlot.startTime);
+        match.scheduledTimeSlot = {
+          _id: targetTimeSlot._id!,
+          startTime: targetTimeSlot.startTime,
+          endTime: targetTimeSlot.endTime,
+          court: typeof targetTimeSlot.court === 'string' ? targetTimeSlot.court : targetTimeSlot.court?.name || null,
+          status: targetTimeSlot.status
+        };
+        match.court = typeof targetTimeSlot.court === 'string' ? targetTimeSlot.court : (targetTimeSlot.court?.name || 'Court 1');
+        
+        // Refresh the views
+        this.organizeMatchesByDay();
+        this.organizeTimeSlotsByDay();
+        
+        this.snackBar.open('Match rescheduled successfully', 'Close', { duration: 3000 });
+      },
+      error: (error) => {
+        console.error('❌ Error rescheduling match:', error);
+        console.error('❌ Error details:', error.error);
+        this.snackBar.open(`Failed to reschedule match: ${error.error?.message || error.message}`, 'Close', { duration: 5000 });
+        
+        // Revert the drag operation by refreshing data
+        this.loadMatches();
+        this.loadAvailableTimeSlots();
+      }
+    });
   }
 
   getMatchesInTimeSlot(timeSlot: TimeSlot): ScheduledMatch[] {
-    return this.matches.filter(match => 
-      match.scheduledDateTime && 
-      new Date(match.scheduledDateTime).getTime() >= new Date(timeSlot.startTime).getTime() &&
-      new Date(match.scheduledDateTime).getTime() < new Date(timeSlot.endTime).getTime()
-    );
+    if (!timeSlot || !timeSlot._id) {
+      return [];
+    }
+    
+    // First try to match by scheduledTimeSlot ID (more accurate)
+    const matchesInSlot = this.matches.filter(match => {
+      if (!match.scheduledTimeSlot) {
+        return false;
+      }
+      
+      // Handle both object and string cases for scheduledTimeSlot
+      const matchTimeSlotId = typeof match.scheduledTimeSlot === 'string' 
+        ? match.scheduledTimeSlot 
+        : match.scheduledTimeSlot._id;
+      
+      return matchTimeSlotId === timeSlot._id;
+    });
+    
+    // Debug logging to see what's happening
+    if (matchesInSlot.length > 0) {
+      console.log(`🎾 Found ${matchesInSlot.length} matches in time slot:`, 
+        this.getTimeSlotDisplayName(timeSlot));
+    }
+    
+    return matchesInSlot;
   }
 
   getTimeSlotDisplayName(timeSlot: TimeSlot): string {
     const start = new Date(timeSlot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const end = new Date(timeSlot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return `${start} - ${end}`;
+  }
+
+  hasUnscheduledMatches(): boolean {
+    return this.matches.some(match => !match.scheduledDateTime);
+  }
+
+  fixSchedule(): void {
+    console.log('🔧 Fixing schedule for tournament:', this.tournamentId);
+    
+    this.schedulingService.fixSchedule(this.tournamentId).subscribe({
+      next: (response) => {
+        console.log('✅ Schedule fixed:', response);
+        this.snackBar.open(response.message, 'Close', { duration: 5000 });
+        
+        // Refresh the matches and time slots
+        this.loadMatches();
+        this.loadAvailableTimeSlots();
+      },
+      error: (error) => {
+        console.error('❌ Error fixing schedule:', error);
+        this.snackBar.open('Failed to fix schedule', 'Close', { duration: 3000 });
+      }
+    });
   }
 }

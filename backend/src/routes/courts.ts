@@ -92,4 +92,90 @@ router.get('/:id', (req: Request, res: Response) => {
   });
 });
 
+// @desc    Update court
+// @route   PUT /api/courts/:id
+// @access  Public
+router.put('/:id', (req: Request, res: Response) => {
+  const courtIndex = tempCourts.findIndex(c => c._id === req.params.id);
+  
+  if (courtIndex === -1) {
+    res.status(404).json({
+      success: false,
+      error: 'Court not found'
+    });
+    return;
+  }
+
+  // Update the court with provided data
+  tempCourts[courtIndex] = {
+    ...tempCourts[courtIndex],
+    ...req.body,
+    _id: req.params.id // Ensure ID doesn't change
+  };
+
+  res.status(200).json({
+    success: true,
+    data: tempCourts[courtIndex]
+  });
+});
+
+// @desc    Delete court
+// @route   DELETE /api/courts/:id
+// @access  Public
+router.delete('/:id', (req: Request, res: Response) => {
+  const courtIndex = tempCourts.findIndex(c => c._id === req.params.id);
+  
+  if (courtIndex === -1) {
+    res.status(404).json({
+      success: false,
+      error: 'Court not found'
+    });
+    return;
+  }
+
+  // Remove the court from the array
+  const deletedCourt = tempCourts.splice(courtIndex, 1)[0];
+
+  res.status(200).json({
+    success: true,
+    data: deletedCourt,
+    message: 'Court deleted successfully'
+  });
+});
+
+// @desc    Update court status
+// @route   PATCH /api/courts/:id/status
+// @access  Public
+router.patch('/:id/status', (req: Request, res: Response) => {
+  const courtIndex = tempCourts.findIndex(c => c._id === req.params.id);
+  
+  if (courtIndex === -1) {
+    res.status(404).json({
+      success: false,
+      error: 'Court not found'
+    });
+    return;
+  }
+
+  const { status } = req.body;
+  
+  // Validate status
+  if (!['available', 'maintenance', 'reserved'].includes(status)) {
+    res.status(400).json({
+      success: false,
+      error: 'Invalid status. Must be one of: available, maintenance, reserved'
+    });
+    return;
+  }
+
+  // Update the court status
+  tempCourts[courtIndex].status = status;
+
+  res.status(200).json({
+    success: true,
+    data: tempCourts[courtIndex],
+    message: `Court status updated to ${status}`
+  });
+});
+
 export default router;

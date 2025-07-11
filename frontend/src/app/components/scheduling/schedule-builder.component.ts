@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -11,7 +11,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatStepperModule } from '@angular/material/stepper';
+import { MatStepperModule, MatStepper } from '@angular/material/stepper';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -359,17 +359,19 @@ import { Tournament } from '../../models/tournament.model';
   `,
   styles: [`
     .schedule-builder-container {
-      padding: var(--space-5);
-      max-width: var(--container-lg);
+      padding: 24px;
+      max-width: 1200px;
       margin: 0 auto;
+      background: #f8f9fa;
+      min-height: 100vh;
     }
 
     .header-toolbar {
-      background: linear-gradient(135deg, var(--primary-600) 0%, var(--secondary-600) 100%);
+      background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
       color: white;
-      border-radius: var(--border-radius-lg);
-      margin-bottom: var(--space-5);
-      box-shadow: var(--shadow-md);
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
     }
 
     .header-content {
@@ -382,20 +384,20 @@ import { Tournament } from '../../models/tournament.model';
     .title-section {
       display: flex;
       align-items: center;
-      gap: var(--space-3);
+      gap: 16px;
     }
 
     .title-info h1 {
       margin: 0;
-      font-size: var(--font-size-2xl);
-      font-weight: var(--font-weight-medium);
-      line-height: var(--line-height-tight);
+      font-size: 28px;
+      font-weight: 500;
+      line-height: 1.2;
     }
 
     .tournament-name {
-      font-size: var(--font-size-base);
-      opacity: 0.8;
-      font-weight: var(--font-weight-normal);
+      font-size: 16px;
+      opacity: 0.9;
+      font-weight: 400;
     }
 
     .header-icon {
@@ -405,14 +407,14 @@ import { Tournament } from '../../models/tournament.model';
     }
 
     .tournament-header-card {
-      margin-bottom: var(--space-5);
-      background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
-      border-radius: var(--border-radius-lg);
-      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .tournament-header-content {
-      padding: var(--space-2) 0;
+      padding: 16px 0;
     }
 
     .schedule-stepper {
@@ -420,14 +422,14 @@ import { Tournament } from '../../models/tournament.model';
     }
 
     .step-content {
-      padding: var(--space-5) 0;
+      padding: 32px 0;
     }
 
     .step-description {
-      color: var(--text-secondary);
-      margin-bottom: var(--space-6);
-      font-size: var(--font-size-base);
-      line-height: var(--line-height-normal);
+      color: #666;
+      margin-bottom: 24px;
+      font-size: 16px;
+      line-height: 1.5;
     }
 
     .full-width {
@@ -456,48 +458,49 @@ import { Tournament } from '../../models/tournament.model';
     .tournament-details-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: var(--space-4);
-      margin-bottom: var(--space-4);
+      gap: 16px;
+      margin-bottom: 16px;
     }
 
     .detail-item {
       display: flex;
       align-items: center;
-      gap: var(--space-2);
-      font-size: var(--font-size-sm);
-      color: var(--text-secondary);
+      gap: 8px;
+      font-size: 14px;
+      color: #666;
     }
 
     .optimization-section {
-      margin-top: var(--space-4);
-      padding-top: var(--space-4);
-      border-top: 1px solid var(--surface-3);
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
     }
 
     .courts-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: var(--space-4);
-      margin-bottom: var(--space-5);
+      gap: 16px;
+      margin-bottom: 24px;
     }
 
     .court-selection-card {
       cursor: pointer;
-      transition: all var(--duration-normal) var(--ease-out);
+      transition: all 0.3s ease;
       border: 2px solid transparent;
-      border-radius: var(--border-radius-lg);
-      box-shadow: var(--shadow-sm);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      background: white;
     }
 
     .court-selection-card:hover {
       transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     }
 
     .court-selection-card.selected {
-      border-color: var(--primary-500);
-      background-color: var(--primary-50);
-      box-shadow: var(--shadow-md);
+      border-color: #1976d2;
+      background-color: #e3f2fd;
+      box-shadow: 0 4px 16px rgba(25, 118, 210, 0.3);
     }
 
     .court-header {
@@ -507,8 +510,9 @@ import { Tournament } from '../../models/tournament.model';
     }
 
     .court-name {
-      font-weight: var(--font-weight-medium);
-      font-size: var(--font-size-lg);
+      font-weight: 500;
+      font-size: 18px;
+      color: #333;
     }
 
     .court-type {
@@ -530,24 +534,23 @@ import { Tournament } from '../../models/tournament.model';
     .court-requirements-status {
       margin: 20px 0;
       padding: 16px;
-      background: #f8f9fa;
       border-radius: 8px;
-      border-left: 4px solid #6c757d;
+      background: #f5f5f5;
     }
 
-    .court-requirements-status.optimal {
-      border-left-color: #28a745;
-      background: #d4edda;
+    .court-requirements-status.good {
+      background: #e8f5e8;
+      border: 1px solid #4caf50;
     }
 
-    .court-requirements-status.insufficient {
-      border-left-color: #dc3545;
-      background: #f8d7da;
+    .court-requirements-status.warning {
+      background: #fff3e0;
+      border: 1px solid #ff9800;
     }
 
-    .court-requirements-status.excessive {
-      border-left-color: #ffc107;
-      background: #fff3cd;
+    .court-requirements-status.error {
+      background: #ffebee;
+      border: 1px solid #f44336;
     }
 
     .requirement-info {
@@ -558,43 +561,38 @@ import { Tournament } from '../../models/tournament.model';
       font-weight: 500;
     }
 
-    .requirement-info .status-optimal {
-      color: #28a745;
-    }
-
-    .requirement-info .status-insufficient {
-      color: #dc3545;
-    }
-
-    .requirement-info .status-excessive {
-      color: #ffc107;
-    }
-
     .progress-bar {
-      width: 100%;
-      height: 6px;
-      background: #e9ecef;
-      border-radius: 3px;
+      height: 4px;
+      background: #e0e0e0;
+      border-radius: 2px;
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
-      background: #007bff;
+      background: #1976d2;
       transition: width 0.3s ease;
     }
 
     .selected-courts-summary {
       margin: 20px 0;
       padding: 16px;
-      background: #f5f5f5;
+      background: white;
       border-radius: 8px;
+      border: 1px solid #e0e0e0;
     }
 
-    .no-courts-message {
-      text-align: center;
-      padding: 40px;
-      color: #666;
+    .selected-courts-summary h4 {
+      margin: 0 0 12px 0;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .step-actions {
+      display: flex;
+      gap: 16px;
+      margin-top: 32px;
+      justify-content: flex-end;
     }
 
     .schedule-config-grid {
@@ -604,20 +602,92 @@ import { Tournament } from '../../models/tournament.model';
       margin-bottom: 24px;
     }
 
-    .schedule-preview-card {
+    .schedule-config-grid .full-width {
+      grid-column: 1 / -1;
+    }
+
+    /* Form field improvements */
+    mat-form-field {
+      width: 100%;
+    }
+
+    /* Step content improvements */
+    .step-content h3 {
+      color: #333;
+      font-size: 24px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    /* No courts message */
+    .no-courts-message {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .no-courts-message mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #ccc;
+      margin-bottom: 16px;
+    }
+
+    /* Optimization section improvements */
+    .optimization-section h4 {
+      color: #333;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    /* Progress and loading states */
+    .progress-section {
       margin: 20px 0;
+      padding: 16px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
     }
 
-    .preview-stats {
+    .final-actions {
       display: flex;
-      gap: 24px;
-      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 24px;
+      justify-content: center;
     }
 
-    .stat-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .schedule-builder-container {
+        padding: 16px;
+      }
+      
+      .header-content {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+      }
+      
+      .tournament-details-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .courts-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .schedule-config-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .step-actions {
+        flex-direction: column;
+      }
+      
+      .final-actions {
+        flex-direction: column;
+      }
     }
 
     .step-actions {
@@ -702,6 +772,8 @@ import { Tournament } from '../../models/tournament.model';
   `]
 })
 export class ScheduleBuilderComponent implements OnInit {
+  @ViewChild('stepper', { static: false }) stepper!: MatStepper;
+  
   tournamentForm: FormGroup;
   courtForm: FormGroup;
   scheduleForm: FormGroup;
@@ -749,8 +821,6 @@ export class ScheduleBuilderComponent implements OnInit {
     console.log('🔍 ScheduleBuilderComponent ngOnInit called');
     console.log('🔍 Current route URL:', window.location.href);
     
-    this.loadCourts();
-    
     // Check for tournament query parameter and auto-select
     this.route.queryParams.subscribe(params => {
       console.log('🔍 Schedule builder query params:', params);
@@ -772,6 +842,12 @@ export class ScheduleBuilderComponent implements OnInit {
               
               // Load courts with the correct limit now that we have the tournament
               this.loadCourts();
+              
+              // Pre-populate schedule form with tournament dates
+              this.scheduleForm.patchValue({
+                startDate: new Date(this.selectedTournament.startDate),
+                endDate: new Date(this.selectedTournament.endDate)
+              });
               
               // Show success message
               this.snackBar.open(`Pre-selected tournament: ${tournament.name}`, 'Close', {
@@ -801,6 +877,8 @@ export class ScheduleBuilderComponent implements OnInit {
       } else {
         // No tournament parameter, load all tournaments normally
         this.loadTournaments();
+        // Load courts with no limit since no tournament is selected
+        this.loadCourts();
       }
     });
   }
@@ -837,7 +915,12 @@ export class ScheduleBuilderComponent implements OnInit {
           this.selectedCourts = courts
             .map(court => court._id)
             .filter((id): id is string => id !== undefined);
+          
+          // Update the form control to make the stepper valid
+          this.courtForm.patchValue({ selectedCourts: this.selectedCourts });
+          
           console.log(`🏟️ Auto-selected ${this.selectedCourts.length} courts for tournament requiring ${this.selectedTournament.requiredCourts} courts`);
+          console.log('📝 Updated courtForm with selected courts:', this.courtForm.value);
         }
       },
       error: (error) => {
@@ -1077,6 +1160,11 @@ export class ScheduleBuilderComponent implements OnInit {
           duration: 3000,
           panelClass: ['success-snackbar']
         });
+        
+        // Advance to the next step (Step 3: Review & Complete)
+        if (this.stepper) {
+          this.stepper.next();
+        }
       },
       error: (error) => {
         console.error('❌ Error generating schedule:', error);

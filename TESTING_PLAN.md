@@ -24,12 +24,12 @@ This comprehensive testing plan covers the complete tournament lifecycle from cr
 | 3. Player Registration & Management | 10/15 | 🔄 In Progress |
 | 4. Team Generation | 10/12 | 🔄 In Progress |
 | 5. Bracket Generation & Management | 8/16 | 🔄 In Progress |
-| 6. Court Management & Scheduling | 0/20 | ⏳ Pending |
+| 6. Court Management & Scheduling | 10/20 | 🔄 In Progress |
 | 7. Live Scoring & Match Progression | 0/22 | ⏳ Pending |
 | 8. Tournament Completion & Results | 0/10 | ⏳ Pending |
 | 9. Integration & End-to-End Testing | 0/18 | ⏳ Pending |
 | 10. UI/UX & Responsive Design | 0/17 | ⏳ Pending |
-| **TOTAL** | **36/160** | **23% Complete** |
+| **TOTAL** | **46/160** | **29% Complete** |
 
 ---
 
@@ -180,37 +180,37 @@ This comprehensive testing plan covers the complete tournament lifecycle from cr
 ## 6. 📅 Court Management & Scheduling Testing
 
 ### 6.1 Court Management
-- [ ] **Court Creation**: Add courts with indoor/outdoor type
-- [ ] **Court Editing**: Modify court details and availability
-- [ ] **Court Deletion**: Remove courts from system
-- [ ] **Court Status**: Set court availability (available/maintenance/reserved)
-- [ ] **Court List Display**: View all courts with status indicators
+- [x] **Court Creation**: Add courts with indoor/outdoor type ✅ TESTED
+- [x] **Court Editing**: Modify court details and availability ✅ TESTED
+- [x] **Court Deletion**: Remove courts from system ✅ TESTED
+- [x] **Court Status**: Set court availability (available/maintenance/reserved) ✅ TESTED
+- [x] **Court List Display**: View all courts with status indicators ✅ TESTED
 - [ ] **Court Validation**: Proper form validation for court creation
 
 ### 6.2 Time Slot Management
-- [ ] **Time Slot Generation**: Create time slots for tournament duration
+- [x] **Time Slot Generation**: Create time slots for tournament duration ✅ TESTED
 - [ ] **Time Slot Display**: View available time slots per court
-- [ ] **Time Slot Booking**: Assign matches to time slots
+- [x] **Time Slot Booking**: Assign matches to time slots ✅ TESTED
 - [ ] **Time Slot Conflicts**: Test conflict detection for overlapping bookings
 - [ ] **Match Duration Calculation**: Verify proper match time estimation
 
 ### 6.3 Schedule Generation
-- [ ] **Automatic Schedule Generation**: Generate full tournament schedule
+- [x] **Automatic Schedule Generation**: Generate full tournament schedule ✅ TESTED
 - [ ] **Schedule Calendar View**: Display schedule in calendar format
 - [ ] **Court Assignment**: Verify proper court assignment to matches
 - [ ] **Schedule Conflicts**: Test conflict detection and resolution
-- [ ] **Schedule Modifications**: Reschedule matches to different times/courts
+- [x] **Schedule Modifications**: Reschedule matches to different times/courts ✅ TESTED
 
 ### 6.4 Schedule Visualization
-- [ ] **Daily Schedule View**: View matches by day
-- [ ] **Weekly Schedule View**: View matches by week
+- [x] **Daily Schedule View**: View matches by day ✅ TESTED
+- [x] **Weekly Schedule View**: View matches by week ✅ TESTED
 - [ ] **Court Lane Display**: Show matches organized by court
 - [ ] **Schedule Export**: Export schedule to external format
 - [ ] **Schedule Printing**: Print-friendly schedule view
 
 **Notes:** 
-- Issues found: 
-- Test completion date: 
+- Issues found: Drag & Drop functionality required backend endpoint implementation and orphaned booking handling
+- Test completion date: 2025-01-11 
 
 ---
 
