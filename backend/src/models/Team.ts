@@ -101,6 +101,31 @@ TeamSchema.virtual('displayName').get(function() {
   return this.seed ? `#${this.seed} ${this.name}` : this.name;
 });
 
+// Virtual for full display name with both players and rankings
+TeamSchema.virtual('fullDisplayName').get(function(this: ITeam) {
+  if (this.players && Array.isArray(this.players) && this.players.length >= 2) {
+    const player1 = (this.players as any)[0];
+    const player2 = (this.players as any)[1];
+    
+    // Check if players are populated with full data
+    if (player1.firstName && player1.lastName && player2.firstName && player2.lastName) {
+      const player1Name = `${player1.firstName} ${player1.lastName}`;
+      const player2Name = `${player2.firstName} ${player2.lastName}`;
+      const player1Rank = player1.ranking ? `(${player1.ranking})` : '';
+      const player2Rank = player2.ranking ? `(${player2.ranking})` : '';
+      
+      if (this.seed) {
+        return `${player1Name} ${player1Rank}/${player2Name} ${player2Rank} (${this.seed})`;
+      } else {
+        return `${player1Name} ${player1Rank}/${player2Name} ${player2Rank}`;
+      }
+    }
+  }
+  
+  // Fallback to regular display name
+  return this.seed ? `#${this.seed} ${this.name}` : this.name;
+});
+
 // Virtual for team size
 TeamSchema.virtual('teamSize').get(function(this: ITeam) {
   return (this.players as any).length;

@@ -65,9 +65,12 @@ export class MatchesViewComponent implements OnInit {
 
   loadMatches(): void {
     this.isLoading = true;
+    console.log('🔍 Loading matches for tournament:', this.tournamentId);
     this.matchService.getTournamentMatches(this.tournamentId).subscribe({
       next: (response) => {
+        console.log('📊 Matches response:', response);
         this.matches = response.data;
+        console.log('📋 Processed matches:', this.matches);
         this.organizeMatchesByDay();
         this.organizeMatchesByRound();
         this.isLoading = false;
@@ -81,15 +84,20 @@ export class MatchesViewComponent implements OnInit {
   }
 
   organizeMatchesByDay(): void {
+    console.log('📅 Organizing matches by day:', this.matches.length, 'matches');
     const dayGroups: { [date: string]: ScheduledMatch[] } = {};
     
     this.matches.forEach(match => {
+      console.log('🔍 Processing match:', match);
       if (match.scheduledDateTime) {
         const date = new Date(match.scheduledDateTime).toDateString();
+        console.log('📅 Match date:', date);
         if (!dayGroups[date]) {
           dayGroups[date] = [];
         }
         dayGroups[date].push(match);
+      } else {
+        console.log('⚠️ Match has no scheduledDateTime:', match);
       }
     });
 
@@ -99,6 +107,8 @@ export class MatchesViewComponent implements OnInit {
         new Date(a.scheduledDateTime!).getTime() - new Date(b.scheduledDateTime!).getTime()
       )
     }));
+    
+    console.log('📊 Final matchesByDay:', this.matchesByDay);
   }
 
   organizeMatchesByRound(): void {
@@ -288,6 +298,14 @@ export class MatchesViewComponent implements OnInit {
   // Action methods
   startMatch(match: ScheduledMatch): void {
     this.router.navigate(['/scoring/match', match._id]);
+  }
+
+  editScore(match: ScheduledMatch): void {
+    this.router.navigate(['/scoring/match', match._id]);
+  }
+
+  canEditScore(match: ScheduledMatch): boolean {
+    return match.status === 'in-progress' || match.status === 'completed';
   }
 
   openRescheduleDialog(match: ScheduledMatch): void {

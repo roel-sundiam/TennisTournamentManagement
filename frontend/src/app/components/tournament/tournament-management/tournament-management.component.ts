@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatCardModule } from '@angular/material/card';
@@ -22,6 +23,7 @@ import { WebSocketService } from '../../../services/websocket.service';
 import { LiveStatisticsService } from '../../../services/live-statistics.service';
 import { Tournament } from '../../../models/tournament.model';
 import { LiveMatchSummary } from '../../../models/scoring.model';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-tournament-management',
@@ -50,6 +52,7 @@ export class TournamentManagementComponent implements OnInit, OnDestroy {
   tournament?: Tournament;
   selectedTabIndex = 0;
   hasLiveMatches = false;
+  isInFinalsStage = false;
   
   // Live data
   liveMatches: LiveMatchSummary[] = [];
@@ -67,6 +70,7 @@ export class TournamentManagementComponent implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
+    private http: HttpClient,
     private tournamentService: TournamentService,
     private scoringService: ScoringService,
     private websocketService: WebSocketService,
@@ -103,9 +107,46 @@ export class TournamentManagementComponent implements OnInit, OnDestroy {
       next: (tournament) => {
         this.tournament = tournament;
         console.log('🏆 Loaded tournament:', tournament);
+        this.checkFinalsStage();
       },
       error: (error) => {
         console.error('❌ Error loading tournament:', error);
+      }
+    });
+  }
+
+  checkFinalsStage(): void {
+    if (!this.tournamentId) return;
+
+    // Check if we're in the finals stage by looking at remaining matches
+    this.http.get(`${environment.apiUrl}/api/matches/${this.tournamentId}`).subscribe({
+      next: (response: any) => {
+        const matches = response.data || [];
+        console.log('🔍 Checking finals stage with matches:', matches);
+        
+        // Find the highest round number that has scheduled or in-progress matches
+        const activeMatches = matches.filter((m: any) => 
+          m.status === 'scheduled' || m.status === 'in-progress'
+        );
+        
+        // Check if only final round matches remain active
+        if (activeMatches.length > 0) {
+          const maxRound = Math.max(...matches.map((m: any) => m.round));
+          const finalRoundMatches = activeMatches.filter((m: any) => m.round === maxRound);
+          
+          // If all active matches are in the final round, we're in finals stage
+          this.isInFinalsStage = finalRoundMatches.length === activeMatches.length && maxRound >= 3;
+          
+          console.log('🏁 Finals stage check:', {
+            isInFinalsStage: this.isInFinalsStage,
+            maxRound,
+            activeMatches: activeMatches.length,
+            finalRoundMatches: finalRoundMatches.length
+          });
+        }
+      },
+      error: (error) => {
+        console.error('❌ Error checking finals stage:', error);
       }
     });
   }

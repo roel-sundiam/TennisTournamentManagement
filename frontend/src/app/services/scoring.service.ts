@@ -92,6 +92,42 @@ export class ScoringService {
   }
 
   /**
+   * Submit final score for a match
+   */
+  submitFinalScore(matchId: string, scoreData: any): Observable<any> {
+    const url = `${this.apiUrl}/${matchId}/final-score`;
+    console.log('🚀 Sending final score request:', {
+      url: url,
+      matchId: matchId,
+      scoreData: scoreData
+    });
+    
+    return this.http.put(url, scoreData).pipe(
+      tap(response => {
+        console.log('✅ Final score response received:', response);
+        this.refreshLiveMatches();
+      }),
+      // Transform response data for frontend compatibility
+      map((response: any) => {
+        if (response.success && response.data) {
+          return {
+            ...response,
+            data: this.transformMatchDataForScoring(response.data)
+          };
+        }
+        return response;
+      }),
+      catchError(error => {
+        console.error('❌ Error submitting final score:', error);
+        console.error('❌ Request URL:', url);
+        console.error('❌ Request data:', scoreData);
+        console.error('❌ Error response:', error.error);
+        throw error;
+      })
+    );
+  }
+
+  /**
    * Get match details from backend
    */
   getMatchDetails(matchId: string): Observable<any> {
@@ -123,11 +159,12 @@ export class ScoringService {
    */
   private transformMatchDataForScoring(matchData: any): any {
     console.log('🔄 Transforming match data:', matchData);
-    console.log('🔍 Team1 data:', matchData.team1);
-    console.log('🔍 Team2 data:', matchData.team2);
+    console.log('🔍 Raw score data from backend:', matchData.score);
+    console.log('🔍 Tennis score nested data:', matchData.score?.tennisScore);
     
     // Transform the tennis score from team1/team2 to player1/player2 format
     const transformedScore = this.transformTennisScore(matchData.score?.tennisScore);
+    console.log('🔄 Transformed score result:', transformedScore);
     
     const result = {
       ...matchData,
@@ -153,9 +190,10 @@ export class ScoringService {
       matchId: matchData._id
     };
     
-    console.log('✅ Transformed data:', {
+    console.log('✅ Final transformed data with score:', {
       player1: result.player1,
       player2: result.player2,
+      score: result.score,
       gameFormat: result.gameFormat
     });
     
@@ -166,11 +204,14 @@ export class ScoringService {
    * Transform tennis score from backend format (team1/team2) to frontend format (player1/player2)
    */
   private transformTennisScore(backendScore: any): any {
+    console.log('🔍 Transforming tennis score from backend:', backendScore);
+    
     if (!backendScore) {
+      console.log('⚠️ No backend score provided, creating initial score');
       return this.createInitialScore();
     }
 
-    return {
+    const result = {
       player1Points: backendScore.team1Points || 0,
       player2Points: backendScore.team2Points || 0,
       player1Games: backendScore.team1Games || 0,
@@ -195,6 +236,16 @@ export class ScoringService {
       winner: backendScore.winner === 'team1' ? 'player1' : 
               backendScore.winner === 'team2' ? 'player2' : undefined
     };
+    
+    console.log('🔄 Tennis score transformation result:', {
+      input: backendScore,
+      output: result,
+      player1Games: result.player1Games,
+      player2Games: result.player2Games,
+      sets: result.sets
+    });
+    
+    return result;
   }
 
   /**

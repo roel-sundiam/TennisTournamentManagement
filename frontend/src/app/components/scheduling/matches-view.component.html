@@ -60,18 +60,18 @@
 
                   <div class="match-content">
                     <div class="teams-display">
-                      <div class="team-container" [class.winner]="match.winner?._id === match.team1._id">
+                      <div class="team-container" [class.winner]="match.winner?._id === match.team1?._id">
                         <div class="team-name">{{ getTeamName(match.team1) }}</div>
-                        <div *ngIf="match.winner?._id === match.team1._id" class="winner-badge">
+                        <div *ngIf="match.winner?._id === match.team1?._id" class="winner-badge">
                           <mat-icon>emoji_events</mat-icon>
                         </div>
                       </div>
                       
                       <div class="vs-divider">VS</div>
                       
-                      <div class="team-container" [class.winner]="match.winner?._id === match.team2._id">
+                      <div class="team-container" [class.winner]="match.winner?._id === match.team2?._id">
                         <div class="team-name">{{ getTeamName(match.team2) }}</div>
-                        <div *ngIf="match.winner?._id === match.team2._id" class="winner-badge">
+                        <div *ngIf="match.winner?._id === match.team2?._id" class="winner-badge">
                           <mat-icon>emoji_events</mat-icon>
                         </div>
                       </div>
@@ -104,6 +104,14 @@
                         (click)="startMatch(match)">
                         <mat-icon>play_arrow</mat-icon>
                         Start Match
+                      </button>
+                      <button 
+                        mat-button 
+                        color="accent"
+                        *ngIf="canEditScore(match)"
+                        (click)="editScore(match)">
+                        <mat-icon>edit</mat-icon>
+                        Edit Score
                       </button>
                       <button 
                         mat-button 
@@ -183,6 +191,14 @@
                   (click)="startMatch(match)"
                   matTooltip="Start Match">
                   <mat-icon>play_arrow</mat-icon>
+                </button>
+                <button 
+                  mat-icon-button 
+                  color="primary"
+                  *ngIf="canEditScore(match)"
+                  (click)="editScore(match)"
+                  matTooltip="Edit Score">
+                  <mat-icon>edit</mat-icon>
                 </button>
               </td>
             </ng-container>

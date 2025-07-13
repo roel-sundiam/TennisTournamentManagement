@@ -147,8 +147,22 @@ async function advanceWinnerToNextRound(completedMatch: any, winnerTeam: any): P
 // @access  Public
 router.get('/live', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const liveMatches = await Match.find({ status: 'in-progress' })
-    .populate('team1', 'name players')
-    .populate('team2', 'name players')
+    .populate({
+      path: 'team1',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
+    .populate({
+      path: 'team2',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
     .populate('tournament', 'name')
     .sort({ updatedAt: -1 });
 
@@ -173,10 +187,31 @@ router.get('/completed', asyncHandler(async (req: Request, res: Response): Promi
   const skip = (Number(page) - 1) * Number(limit);
   
   const completedMatches = await Match.find(query)
-    .populate('team1', 'name players')
-    .populate('team2', 'name players')
+    .populate({
+      path: 'team1',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
+    .populate({
+      path: 'team2',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
     .populate('tournament', 'name')
-    .populate('winner', 'name players')
+    .populate({
+      path: 'winner',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
     .sort({ 'score.endTime': -1, updatedAt: -1 })
     .limit(Number(limit))
     .skip(skip);
@@ -269,10 +304,24 @@ router.post('/bulk', asyncHandler(async (req: Request, res: Response): Promise<v
 
       // Only populate teams if they exist
       if (match.team1) {
-        await match.populate('team1', 'name players');
+        await match.populate({
+          path: 'team1',
+          select: 'name players seed',
+          populate: {
+            path: 'players',
+            select: 'firstName lastName ranking'
+          }
+        });
       }
       if (match.team2) {
-        await match.populate('team2', 'name players');
+        await match.populate({
+          path: 'team2',
+          select: 'name players seed',
+          populate: {
+            path: 'players',
+            select: 'firstName lastName ranking'
+          }
+        });
       }
       
       createdMatches.push(match);
@@ -370,10 +419,24 @@ router.post('/create-missing/:tournamentId', asyncHandler(async (req: Request, r
         
         // Populate teams if they exist
         if (newMatch.team1) {
-          await newMatch.populate('team1', 'name players');
+          await newMatch.populate({
+            path: 'team1',
+            select: 'name players seed',
+            populate: {
+              path: 'players',
+              select: 'firstName lastName ranking'
+            }
+          });
         }
         if (newMatch.team2) {
-          await newMatch.populate('team2', 'name players');
+          await newMatch.populate({
+            path: 'team2',
+            select: 'name players seed',
+            populate: {
+              path: 'players',
+              select: 'firstName lastName ranking'
+            }
+          });
         }
         
         createdMatches.push(newMatch);
@@ -404,8 +467,22 @@ router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response): P
   }
 
   const matches = await Match.find(query)
-    .populate('team1', 'name players')
-    .populate('team2', 'name players')
+    .populate({
+      path: 'team1',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
+    .populate({
+      path: 'team2',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
     .populate('tournament', 'name')
     .sort({ round: 1, matchNumber: 1 });
 
@@ -421,8 +498,22 @@ router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response): P
 // @access  Public
 router.get('/match/:id', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const match = await Match.findById(req.params.id)
-    .populate('team1', 'name players')
-    .populate('team2', 'name players')
+    .populate({
+      path: 'team1',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
+    .populate({
+      path: 'team2',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
     .populate('tournament', 'name gameFormat');
 
   if (!match) {
@@ -492,8 +583,22 @@ router.put('/:id/score', asyncHandler(async (req: Request, res: Response): Promi
   }
 
   const match = await Match.findById(req.params.id)
-    .populate('team1', 'name players')
-    .populate('team2', 'name players');
+    .populate({
+      path: 'team1',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
+    .populate({
+      path: 'team2',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    });
 
   if (!match) {
     res.status(404).json({
@@ -588,8 +693,22 @@ router.put('/:id/final-score', asyncHandler(async (req: Request, res: Response):
   const { gameFormat, finalScore, status } = req.body;
 
   const match = await Match.findById(req.params.id)
-    .populate('team1', 'name players')
-    .populate('team2', 'name players');
+    .populate({
+      path: 'team1',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    })
+    .populate({
+      path: 'team2',
+      select: 'name players seed',
+      populate: {
+        path: 'players',
+        select: 'firstName lastName ranking'
+      }
+    });
 
   if (!match) {
     res.status(404).json({
@@ -604,8 +723,8 @@ router.put('/:id/final-score', asyncHandler(async (req: Request, res: Response):
     match.gameFormat = gameFormat;
   }
 
-  // Set final score directly for tiebreak formats
-  if (gameFormat === 'tiebreak-8' || gameFormat === 'tiebreak-10') {
+  // Set final score directly for all game formats
+  if (finalScore) {
     match.score.tennisScore = {
       team1Points: 0,
       team2Points: 0,
@@ -618,7 +737,7 @@ router.put('/:id/final-score', asyncHandler(async (req: Request, res: Response):
         setNumber: 1,
         team1Games: finalScore.team1Games,
         team2Games: finalScore.team2Games,
-        isTiebreak: false,
+        isTiebreak: gameFormat === 'tiebreak-8' || gameFormat === 'tiebreak-10',
         isCompleted: true
       }],
       isDeuce: false,
@@ -756,8 +875,22 @@ router.post('/', asyncHandler(async (req: Request, res: Response): Promise<void>
     }
   });
 
-  await match.populate('team1', 'name players');
-  await match.populate('team2', 'name players');
+  await match.populate({
+    path: 'team1',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
+  await match.populate({
+    path: 'team2',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
   await match.populate('tournament', 'name');
 
   res.status(201).json({
@@ -834,10 +967,38 @@ router.post('/fix-semifinals/:tournamentId', asyncHandler(async (req: Request, r
   await round2Matches[1].save();
   
   // Populate the updated matches
-  await round2Matches[0].populate('team1', 'name players');
-  await round2Matches[0].populate('team2', 'name players');
-  await round2Matches[1].populate('team1', 'name players');
-  await round2Matches[1].populate('team2', 'name players');
+  await round2Matches[0].populate({
+    path: 'team1',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
+  await round2Matches[0].populate({
+    path: 'team2',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
+  await round2Matches[1].populate({
+    path: 'team1',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
+  await round2Matches[1].populate({
+    path: 'team2',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
   
   console.log('✅ Fixed semifinals successfully');
   
@@ -914,8 +1075,22 @@ router.post('/from-bracket', asyncHandler(async (req: Request, res: Response): P
             }
           });
 
-          await newMatch.populate('team1', 'name players');
-          await newMatch.populate('team2', 'name players');
+          await newMatch.populate({
+            path: 'team1',
+            select: 'name players seed',
+            populate: {
+              path: 'players',
+              select: 'firstName lastName ranking'
+            }
+          });
+          await newMatch.populate({
+            path: 'team2',
+            select: 'name players seed',
+            populate: {
+              path: 'players',
+              select: 'firstName lastName ranking'
+            }
+          });
           
           createdMatches.push(newMatch);
         }
@@ -927,6 +1102,93 @@ router.post('/from-bracket', asyncHandler(async (req: Request, res: Response): P
     success: true,
     message: `Created ${createdMatches.length} matches from bracket`,
     data: createdMatches
+  });
+}));
+
+// @desc    Fix tournament final (assign semifinal winners to final)
+// @route   POST /api/matches/fix-final/:tournamentId
+// @access  Private
+router.post('/fix-final/:tournamentId', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { tournamentId } = req.params;
+  
+  console.log(`🔧 Fixing final for tournament: ${tournamentId}`);
+  
+  // Get Round 2 completed matches (semifinals) to find winners
+  const round2Matches = await Match.find({ 
+    tournament: tournamentId, 
+    round: 2,
+    status: 'completed'
+  }).populate('winner', 'name players');
+  
+  if (round2Matches.length !== 2) {
+    res.status(400).json({
+      success: false,
+      message: `Expected 2 completed Round 2 matches, found ${round2Matches.length}`
+    });
+    return;
+  }
+  
+  // Sort matches by match number
+  round2Matches.sort((a, b) => a.matchNumber - b.matchNumber);
+  
+  // Extract winners
+  const semifinal1Winner = round2Matches[0].winner;
+  const semifinal2Winner = round2Matches[1].winner;
+  
+  // Verify both semifinals have winners
+  if (!semifinal1Winner || !semifinal2Winner) {
+    res.status(400).json({
+      success: false,
+      message: 'Both semifinals must be completed with winners'
+    });
+    return;
+  }
+  
+  // Find the final match (Round 3)
+  const finalMatch = await Match.findOne({ 
+    tournament: tournamentId, 
+    round: 3,
+    matchNumber: 1
+  });
+  
+  if (!finalMatch) {
+    res.status(404).json({
+      success: false,
+      message: 'Final match not found'
+    });
+    return;
+  }
+  
+  // Assign semifinal winners to final
+  finalMatch.team1 = semifinal1Winner;
+  finalMatch.team2 = semifinal2Winner;
+  finalMatch.status = 'scheduled';
+  await finalMatch.save();
+  
+  // Populate the updated final match
+  await finalMatch.populate({
+    path: 'team1',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
+  await finalMatch.populate({
+    path: 'team2',
+    select: 'name players seed',
+    populate: {
+      path: 'players',
+      select: 'firstName lastName ranking'
+    }
+  });
+  
+  console.log('✅ Fixed final match successfully');
+  
+  res.status(200).json({
+    success: true,
+    message: 'Final match teams assigned successfully',
+    data: finalMatch
   });
 }));
 

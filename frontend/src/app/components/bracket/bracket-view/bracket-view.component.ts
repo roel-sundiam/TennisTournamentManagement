@@ -109,6 +109,17 @@ export class BracketViewComponent implements OnInit {
           console.log('🎯 Bracket format:', this.bracketFormat);
           console.log('📊 Bracket rounds:', this.bracket?.rounds?.length);
           console.log('🎾 Bracket teams:', this.bracket?.teams?.length);
+          
+          // Debug round structure
+          if (this.bracket?.rounds) {
+            console.log('🔍 Round details:');
+            this.bracket.rounds.forEach((round, i) => {
+              console.log(`  Round ${i + 1}: ${round.roundName} (${round.matches?.length} matches)`);
+              round.matches?.forEach((match, j) => {
+                console.log(`    Match ${j + 1}: ${match.player1?.name} vs ${match.player2?.name}`);
+              });
+            });
+          }
           console.log('📄 Bracket bracketData:', this.bracket?.bracketData);
           
           // Ensure bracket is defined before proceeding
@@ -741,6 +752,30 @@ export class BracketViewComponent implements OnInit {
           console.log(`✅ Found DB match: Round ${dbMatch.round}, Match ${dbMatch.matchNumber}, Status: ${dbMatch.status}, Has Score: ${!!dbMatch.score?.tennisScore}`);
         } else {
           console.log(`❌ No DB match found for Round ${bracketMatch.roundNumber}, Match ${bracketMatch.matchNumber}`);
+        }
+
+        // Update team assignments for any match (scheduled or completed) that has teams
+        if (dbMatch && (dbMatch.team1 || dbMatch.team2)) {
+          console.log(`🔄 Updating team assignments for Round ${bracketMatch.roundNumber}, Match ${bracketMatch.matchNumber}`);
+          
+          // Update team assignments from database
+          if (dbMatch.team1) {
+            bracketMatch.player1 = {
+              id: dbMatch.team1.id || dbMatch.team1._id,
+              name: dbMatch.team1.fullDisplayName || dbMatch.team1.name || 'Team 1',
+              seed: dbMatch.team1.seed
+            };
+            console.log(`👥 Updated player1: ${bracketMatch.player1.name}`);
+          }
+          
+          if (dbMatch.team2) {
+            bracketMatch.player2 = {
+              id: dbMatch.team2.id || dbMatch.team2._id,
+              name: dbMatch.team2.fullDisplayName || dbMatch.team2.name || 'Team 2',
+              seed: dbMatch.team2.seed
+            };
+            console.log(`👥 Updated player2: ${bracketMatch.player2.name}`);
+          }
         }
 
         if (dbMatch && dbMatch.status === 'completed' && dbMatch.score?.tennisScore) {

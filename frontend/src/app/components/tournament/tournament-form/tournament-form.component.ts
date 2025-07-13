@@ -11,6 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { TournamentService } from '../../../services/tournament.service';
 import { Tournament } from '../../../models/tournament.model';
 
@@ -28,7 +29,8 @@ import { Tournament } from '../../../models/tournament.model';
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule
+    MatNativeDateModule,
+    MatTooltipModule
   ],
   template: `
     <div class="tournament-form-container">
@@ -88,9 +90,13 @@ import { Tournament } from '../../../models/tournament.model';
                 <mat-label>Tournament Format</mat-label>
                 <mat-select formControlName="format">
                   <mat-option value="single-elimination">Single Elimination</mat-option>
-                  <mat-option value="double-elimination">Double Elimination</mat-option>
-                  <mat-option value="round-robin">Round Robin</mat-option>
+                  <mat-option value="double-elimination" class="unsupported-option">Double Elimination</mat-option>
+                  <mat-option value="round-robin" class="unsupported-option">Round Robin</mat-option>
                 </mat-select>
+                <mat-hint *ngIf="showFormatWarning" class="warning-hint">
+                  <mat-icon>warning</mat-icon>
+                  This tournament format is not yet available. Please use Single Elimination.
+                </mat-hint>
                 <mat-error *ngIf="tournamentForm.get('format')?.hasError('required')">
                   Tournament format is required
                 </mat-error>
@@ -112,7 +118,7 @@ import { Tournament } from '../../../models/tournament.model';
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Match Format</mat-label>
                 <mat-select formControlName="gameFormat">
-                  <mat-option value="regular">
+                  <mat-option value="regular" class="unsupported-option">
                     <div class="format-option">
                       <div class="format-title">Regular Tennis</div>
                       <div class="format-description">Best of 3 sets with traditional scoring (0-15-30-40)</div>
@@ -131,7 +137,11 @@ import { Tournament } from '../../../models/tournament.model';
                     </div>
                   </mat-option>
                 </mat-select>
-                <mat-hint>This will apply to all matches in the tournament</mat-hint>
+                <mat-hint *ngIf="!showGameFormatWarning">This will apply to all matches in the tournament</mat-hint>
+                <mat-hint *ngIf="showGameFormatWarning" class="warning-hint">
+                  <mat-icon>warning</mat-icon>
+                  Regular Tennis is not yet fully supported. We recommend using 8-Game or 10-Game Tiebreak formats.
+                </mat-hint>
                 <mat-error *ngIf="tournamentForm.get('gameFormat')?.hasError('required')">
                   Match format is required
                 </mat-error>
@@ -178,7 +188,8 @@ import { Tournament } from '../../../models/tournament.model';
             <mat-icon>cancel</mat-icon>
             Cancel
           </button>
-          <button mat-raised-button color="primary" [disabled]="tournamentForm.invalid" (click)="onSubmit()">
+          <button mat-raised-button color="primary" [disabled]="!isFormValid()" (click)="onSubmit()" 
+                  [matTooltip]="hasUnsupportedOptions() ? 'Please select supported tournament and match formats' : ''">
             <mat-icon>save</mat-icon>
             {{ isEditMode ? 'Update Tournament' : 'Create Tournament' }}
           </button>
@@ -258,12 +269,43 @@ import { Tournament } from '../../../models/tournament.model';
         line-height: 1.3;
       }
     }
+
+    .warning-hint {
+      color: #ff9800 !important;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      
+      mat-icon {
+        font-size: 16px;
+        height: 16px;
+        width: 16px;
+      }
+    }
+
+    .unsupported-option {
+      color: #999 !important;
+      font-style: italic;
+      
+      .format-option {
+        .format-title {
+          color: #999 !important;
+        }
+        
+        .format-description {
+          color: #bbb !important;
+        }
+      }
+    }
   `]
 })
 export class TournamentFormComponent implements OnInit {
   tournamentForm!: FormGroup;
   isEditMode = false;
   tournamentId: string | null = null;
+  showFormatWarning = false;
+  showGameFormatWarning = false;
 
   constructor(
     private fb: FormBuilder,
@@ -277,6 +319,7 @@ export class TournamentFormComponent implements OnInit {
     this.tournamentId = this.route.snapshot.paramMap.get('id');
     this.isEditMode = !!this.tournamentId;
     this.initializeForm();
+    this.setupFormSubscriptions();
     
     if (this.isEditMode && this.tournamentId) {
       this.loadTournament(this.tournamentId);
@@ -291,11 +334,44 @@ export class TournamentFormComponent implements OnInit {
       endDate: ['', [Validators.required]],
       format: ['', [Validators.required]],
       gameType: ['', [Validators.required]],
-      gameFormat: ['regular', [Validators.required]],
+      gameFormat: ['tiebreak-10', [Validators.required]],
       maxPlayers: [8, [Validators.required, Validators.min(2)]],
       requiredCourts: [2, [Validators.required, Validators.min(1)]],
       venue: ['']
     });
+  }
+
+  setupFormSubscriptions(): void {
+    // Check initial values
+    const initialFormat = this.tournamentForm.get('format')?.value;
+    const initialGameFormat = this.tournamentForm.get('gameFormat')?.value;
+    
+    this.showFormatWarning = initialFormat === 'double-elimination' || initialFormat === 'round-robin';
+    this.showGameFormatWarning = initialGameFormat === 'regular';
+
+    // Watch for tournament format changes
+    this.tournamentForm.get('format')?.valueChanges.subscribe(value => {
+      this.showFormatWarning = value === 'double-elimination' || value === 'round-robin';
+    });
+
+    // Watch for game format changes
+    this.tournamentForm.get('gameFormat')?.valueChanges.subscribe(value => {
+      this.showGameFormatWarning = value === 'regular';
+    });
+  }
+
+  hasUnsupportedOptions(): boolean {
+    const format = this.tournamentForm.get('format')?.value;
+    const gameFormat = this.tournamentForm.get('gameFormat')?.value;
+    
+    const unsupportedFormat = format === 'double-elimination' || format === 'round-robin';
+    const unsupportedGameFormat = gameFormat === 'regular';
+    
+    return unsupportedFormat || unsupportedGameFormat;
+  }
+
+  isFormValid(): boolean {
+    return this.tournamentForm.valid && !this.hasUnsupportedOptions();
   }
 
   loadTournament(id: string): void {
@@ -325,7 +401,23 @@ export class TournamentFormComponent implements OnInit {
   }
 
   onSubmit(): void {
-    if (this.tournamentForm.valid) {
+    if (!this.tournamentForm.valid) {
+      this.snackBar.open('Please fill in all required fields', 'Close', {
+        duration: 3000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    if (this.hasUnsupportedOptions()) {
+      this.snackBar.open('Please select supported tournament and match formats to continue', 'Close', {
+        duration: 5000,
+        panelClass: ['warning-snackbar']
+      });
+      return;
+    }
+
+    if (this.isFormValid()) {
       const tournamentData = {
         ...this.tournamentForm.value
       };

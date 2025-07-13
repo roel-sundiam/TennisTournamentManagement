@@ -1,5 +1,6 @@
 import { Component, OnInit, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,6 +8,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { ScoringService } from '../../../services/scoring.service';
 import { BracketService } from '../../../services/bracket.service';
 import { MatchDetails, TennisScore } from '../../../models/scoring.model';
@@ -16,20 +19,23 @@ import { MatchDetails, TennisScore } from '../../../models/scoring.model';
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     RouterModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
     MatChipsModule,
     MatProgressBarModule,
-    MatDialogModule
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule
   ],
   template: `
     <div class="match-scorer-container" *ngIf="match">
       <!-- Match Header -->
       <div class="match-header">
         <div class="match-info">
-          <h1>{{ match.player1.name || 'Player 1' }} vs {{ match.player2.name || 'Player 2' }}</h1>
+          <h1>{{ getPlayerName(match.player1) }} vs {{ getPlayerName(match.player2) }}</h1>
           <div class="match-meta">
             <span class="court">{{ match.court || 'Center Court' }}</span>
             <span class="format">{{ match.matchFormat | titlecase }}</span>
@@ -45,165 +51,72 @@ import { MatchDetails, TennisScore } from '../../../models/scoring.model';
             <mat-icon>play_arrow</mat-icon>
             Start Match
           </button>
-          
-          <button mat-raised-button color="warn" 
-                  *ngIf="match.status === 'in-progress'"
-                  (click)="pauseMatch()">
-            <mat-icon>pause</mat-icon>
-            Pause
-          </button>
-          
-          <button mat-raised-button color="accent" 
-                  *ngIf="match.status === 'suspended'"
-                  (click)="resumeMatch()">
-            <mat-icon>play_arrow</mat-icon>
-            Resume
-          </button>
         </div>
       </div>
 
-      <!-- Main Scoreboard -->
-      <mat-card class="scoreboard-card">
-        <div class="scoreboard">
-          <!-- Header Row -->
-          <div class="score-header">
-            <div class="player-header">Player</div>
-            <div class="sets-header">
-              <span *ngFor="let set of match.score.sets; let i = index" class="set-header">
-                Set {{ i + 1 }}
-              </span>
-            </div>
-            <div class="points-header">Points</div>
-          </div>
-
-          <!-- Player 1 Row -->
-          <div class="player-row" [class.winner]="match.score.winner === 'player1'">
-            <div class="player-info">
-              <div class="player-name">
-                <mat-icon *ngIf="isServing('player1')" class="serving-icon">sports_tennis</mat-icon>
-                {{ match.player1.name || 'Player 1' }}
-                <span class="seed" *ngIf="match.player1.seed">({{ match.player1.seed }})</span>
-              </div>
-            </div>
-            
-            <div class="sets-scores">
-              <div *ngFor="let set of match.score.sets; let i = index" 
-                   class="set-score" 
-                   [class.current-set]="i === match.score.currentSet - 1">
-                {{ set.player1Games }}
-                <span *ngIf="set.player1Tiebreak !== undefined" class="tiebreak">
-                  <sup>{{ set.player1Tiebreak }}</sup>
-                </span>
-              </div>
-            </div>
-            
-            <div class="current-points">
-              {{ formatCurrentPoints('player1') }}
-            </div>
-          </div>
-
-          <!-- Player 2 Row -->
-          <div class="player-row" [class.winner]="match.score.winner === 'player2'">
-            <div class="player-info">
-              <div class="player-name">
-                <mat-icon *ngIf="isServing('player2')" class="serving-icon">sports_tennis</mat-icon>
-                {{ match.player2.name || 'Player 2' }}
-                <span class="seed" *ngIf="match.player2.seed">({{ match.player2.seed }})</span>
-              </div>
-            </div>
-            
-            <div class="sets-scores">
-              <div *ngFor="let set of match.score.sets; let i = index" 
-                   class="set-score" 
-                   [class.current-set]="i === match.score.currentSet - 1">
-                {{ set.player2Games }}
-                <span *ngIf="set.player2Tiebreak !== undefined" class="tiebreak">
-                  <sup>{{ set.player2Tiebreak }}</sup>
-                </span>
-              </div>
-            </div>
-            
-            <div class="current-points">
-              {{ formatCurrentPoints('player2') }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Match Status Indicators -->
-        <div class="match-indicators" *ngIf="match.status === 'in-progress'">
-          <mat-chip *ngIf="match.score.isMatchPoint" color="warn" selected>
-            <mat-icon>warning</mat-icon>
-            Match Point
-          </mat-chip>
-          <mat-chip *ngIf="match.score.isSetPoint && !match.score.isMatchPoint" color="accent" selected>
-            <mat-icon>flag</mat-icon>
-            Set Point
-          </mat-chip>
-          <mat-chip *ngIf="match.score.isDeuce" color="primary" selected>
-            <mat-icon>balance</mat-icon>
-            Deuce
-          </mat-chip>
-          <mat-chip *ngIf="match.score.advantage" color="primary" selected>
-            <mat-icon>trending_up</mat-icon>
-            Advantage {{ getAdvantagePlayer() }}
-          </mat-chip>
-        </div>
-      </mat-card>
-
-      <!-- Scoring Buttons -->
-      <div class="scoring-section" *ngIf="match.status === 'in-progress'">
-        <div class="scoring-buttons">
-          <button mat-fab 
-                  color="primary" 
-                  class="score-button player1-button"
-                  (click)="awardPoint('player1')"
-                  [disabled]="match.status !== 'in-progress'">
-            <div class="button-content">
-              <span class="player-initial">{{ getPlayerInitial(match.player1.name || 'P1') }}</span>
-            </div>
-          </button>
-
-          <div class="vs-indicator">
-            <div class="current-game">
-              <span class="game-label">Current Game</span>
-              <div class="game-score">
-                {{ formatCurrentPoints('player1') }} - {{ formatCurrentPoints('player2') }}
-              </div>
-            </div>
-          </div>
-
-          <button mat-fab 
-                  color="primary" 
-                  class="score-button player2-button"
-                  (click)="awardPoint('player2')"
-                  [disabled]="match.status !== 'in-progress'">
-            <div class="button-content">
-              <span class="player-initial">{{ getPlayerInitial(match.player2.name || 'P2') }}</span>
-            </div>
-          </button>
-        </div>
-
-        <!-- Additional Controls -->
-        <div class="additional-controls">
-          <button mat-button color="warn" (click)="undoLastPoint()" [disabled]="!canUndo">
-            <mat-icon>undo</mat-icon>
-            Undo Last Point
-          </button>
+      <!-- Simple Score Entry Form -->
+      <div class="score-entry-section" *ngIf="match.status === 'in-progress' || match.status === 'scheduled'">
+        <mat-card class="score-entry-card">
+          <mat-card-header>
+            <mat-card-title>Enter Final Score</mat-card-title>
+            <mat-card-subtitle>{{ getPlayerName(match.player1) }} vs {{ getPlayerName(match.player2) }}</mat-card-subtitle>
+          </mat-card-header>
           
-          <button mat-button (click)="correctScore()">
-            <mat-icon>edit</mat-icon>
-            Correct Score
-          </button>
+          <mat-card-content>
+            <div class="simple-score-form">
+              <div class="score-input-row">
+                <div class="player-section">
+                  <label class="player-label">{{ getPlayerName(match.player1) }}</label>
+                  <mat-form-field appearance="outline" class="score-field">
+                    <input matInput 
+                           type="number" 
+                           [(ngModel)]="finalScore.team1Score" 
+                           min="0" 
+                           max="50"
+                           placeholder="0">
+                  </mat-form-field>
+                </div>
+                
+                <div class="score-separator">-</div>
+                
+                <div class="player-section">
+                  <label class="player-label">{{ getPlayerName(match.player2) }}</label>
+                  <mat-form-field appearance="outline" class="score-field">
+                    <input matInput 
+                           type="number" 
+                           [(ngModel)]="finalScore.team2Score" 
+                           min="0" 
+                           max="50"
+                           placeholder="0">
+                  </mat-form-field>
+                </div>
+              </div>
+              
+              <div class="format-info">
+                <span class="format-label">{{ formatGameFormat(match.gameFormat || 'regular') }}</span>
+              </div>
+            </div>
+          </mat-card-content>
           
-          <button mat-button color="accent" (click)="switchServer()">
-            <mat-icon>sync_alt</mat-icon>
-            Switch Server
-          </button>
-        </div>
+          <mat-card-actions class="simple-actions">
+            <button mat-raised-button 
+                    color="primary" 
+                    (click)="submitFinalScore()"
+                    [disabled]="!isValidScore()">
+              <mat-icon>save</mat-icon>
+              Save Score
+            </button>
+            
+            <button mat-button (click)="goBack()">
+              <mat-icon>arrow_back</mat-icon>
+              Back
+            </button>
+          </mat-card-actions>
+        </mat-card>
       </div>
 
       <!-- Match Complete -->
-      <div class="match-complete" *ngIf="match.status === 'completed'">
+      <div class="match-complete" *ngIf="match.status === 'completed' && !isEditingScore">
         <mat-card class="winner-card">
           <mat-card-content>
             <div class="winner-announcement">
@@ -219,6 +132,11 @@ import { MatchDetails, TennisScore } from '../../../models/scoring.model';
                 Advance Tournament
               </button>
               
+              <button mat-button color="warn" (click)="editScore()">
+                <mat-icon>edit</mat-icon>
+                Edit Score
+              </button>
+              
               <button mat-button (click)="viewMatchDetails()">
                 <mat-icon>assessment</mat-icon>
                 View Full Details
@@ -228,36 +146,81 @@ import { MatchDetails, TennisScore } from '../../../models/scoring.model';
         </mat-card>
       </div>
 
-      <!-- Match Statistics -->
-      <mat-card class="stats-card">
-        <mat-card-header>
-          <mat-card-title>Match Statistics</mat-card-title>
-        </mat-card-header>
-        
-        <mat-card-content>
-          <div class="stats-grid">
-            <div class="stat-item">
-              <span class="stat-label">Duration</span>
-              <span class="stat-value">{{ getMatchDuration() }}</span>
+      <!-- Edit Score for Completed Match -->
+      <div class="score-edit-section" *ngIf="match.status === 'completed' && isEditingScore">
+        <mat-card class="score-entry-card">
+          <mat-card-header>
+            <mat-card-title>Edit Final Score</mat-card-title>
+            <mat-card-subtitle>{{ formatGameFormat(match.gameFormat || 'regular') }} Match - Current: {{ formatFinalScore() }}</mat-card-subtitle>
+          </mat-card-header>
+          
+          <mat-card-content>
+            <div class="score-entry-form">
+              <!-- Player 1 Score -->
+              <div class="player-score-section">
+                <h3>{{ getPlayerName(match.player1) }}</h3>
+                <div class="score-input-group">
+                  <mat-form-field appearance="outline" class="score-input">
+                    <mat-label>Score</mat-label>
+                    <input matInput 
+                           type="number" 
+                           [(ngModel)]="finalScore.team1Score" 
+                           min="0" 
+                           max="50"
+                           placeholder="e.g., 10">
+                  </mat-form-field>
+                </div>
+              </div>
+              
+              <!-- VS Indicator -->
+              <div class="vs-separator">
+                <span class="vs-text">VS</span>
+              </div>
+              
+              <!-- Player 2 Score -->
+              <div class="player-score-section">
+                <h3>{{ getPlayerName(match.player2) }}</h3>
+                <div class="score-input-group">
+                  <mat-form-field appearance="outline" class="score-input">
+                    <mat-label>Score</mat-label>
+                    <input matInput 
+                           type="number" 
+                           [(ngModel)]="finalScore.team2Score" 
+                           min="0" 
+                           max="50"
+                           placeholder="e.g., 9">
+                  </mat-form-field>
+                </div>
+              </div>
             </div>
             
-            <div class="stat-item">
-              <span class="stat-label">Total Points</span>
-              <span class="stat-value">{{ getTotalPoints() }}</span>
+            <!-- Score Examples -->
+            <div class="score-examples">
+              <p><strong>Examples:</strong></p>
+              <ul>
+                <li *ngIf="match.gameFormat === 'tiebreak-10'">10-game tiebreak: 10-8, 10-7, 12-10</li>
+                <li *ngIf="match.gameFormat === 'tiebreak-8'">8-game tiebreak: 8-6, 8-5, 9-7</li>
+                <li *ngIf="match.gameFormat === 'regular'">Regular set: 6-4, 6-3, 7-5</li>
+              </ul>
             </div>
+          </mat-card-content>
+          
+          <mat-card-actions class="score-actions">
+            <button mat-raised-button 
+                    color="primary" 
+                    (click)="updateFinalScore()"
+                    [disabled]="!isValidScore()">
+              <mat-icon>save</mat-icon>
+              Update Score
+            </button>
             
-            <div class="stat-item">
-              <span class="stat-label">Current Set</span>
-              <span class="stat-value">{{ match.score.currentSet }}</span>
-            </div>
-            
-            <div class="stat-item">
-              <span class="stat-label">Games Played</span>
-              <span class="stat-value">{{ getTotalGames() }}</span>
-            </div>
-          </div>
-        </mat-card-content>
-      </mat-card>
+            <button mat-button (click)="cancelEdit()">
+              <mat-icon>close</mat-icon>
+              Cancel
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
     </div>
 
     <!-- Loading State -->
@@ -319,6 +282,88 @@ import { MatchDetails, TennisScore } from '../../../models/scoring.model';
           display: flex;
           align-items: center;
           gap: 8px;
+        }
+      }
+    }
+
+    .score-entry-section {
+      margin-bottom: 24px;
+      
+      .score-entry-card {
+        max-width: 600px;
+        margin: 0 auto;
+        
+        .simple-score-form {
+          padding: 24px 0;
+          
+          .score-input-row {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 24px;
+            
+            .player-section {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 8px;
+              
+              .player-label {
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: var(--primary-color);
+                text-align: center;
+                max-width: 150px;
+                word-wrap: break-word;
+              }
+              
+              .score-field {
+                width: 80px;
+                
+                input {
+                  text-align: center;
+                  font-size: 2rem;
+                  font-weight: 600;
+                  padding: 12px;
+                }
+              }
+            }
+            
+            .score-separator {
+              font-size: 2rem;
+              font-weight: 600;
+              color: var(--primary-color);
+              margin-bottom: 8px;
+            }
+          }
+          
+          .format-info {
+            text-align: center;
+            
+            .format-label {
+              background: #f5f5f5;
+              padding: 8px 16px;
+              border-radius: 20px;
+              font-size: 0.9rem;
+              color: var(--text-secondary);
+            }
+          }
+        }
+        
+        .simple-actions {
+          display: flex;
+          justify-content: center;
+          gap: 16px;
+          padding-top: 16px;
+          
+          button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            min-width: 120px;
+          }
         }
       }
     }
@@ -668,8 +713,11 @@ export class MatchScorerComponent implements OnInit {
   @Input() matchId?: string;
 
   match?: MatchDetails;
-  canUndo = false;
-  private currentServer: 'player1' | 'player2' = 'player1';
+  finalScore = {
+    team1Score: 0,
+    team2Score: 0
+  };
+  isEditingScore = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -695,6 +743,9 @@ export class MatchScorerComponent implements OnInit {
         console.log('Player1 data:', match?.player1);
         console.log('Player2 data:', match?.player2);
         this.match = match;
+        
+        // Reset final score form and load current scores if any
+        this.loadCurrentScores();
       },
       error: (error) => {
         console.error('Error loading match:', error);
@@ -702,26 +753,16 @@ export class MatchScorerComponent implements OnInit {
     });
   }
 
-  formatCurrentPoints(player: 'player1' | 'player2'): string {
-    if (!this.match) return '0';
-    
-    const score = this.match.score;
-    const points = player === 'player1' ? score.player1Points : score.player2Points;
-    
-    if (score.isDeuce) return 'DEUCE';
-    if (score.advantage === player) return 'AD';
-    if (score.advantage && score.advantage !== player && points >= 40) return '40';
-    
-    const pointStrings = ['0', '15', '30', '40'];
-    return pointStrings[pointStrings.indexOf(points.toString())] || '0';
-  }
 
-  isServing(player: 'player1' | 'player2'): boolean {
-    return this.currentServer === player;
-  }
-
-  getPlayerInitial(name: string): string {
-    return name.charAt(0).toUpperCase();
+  getPlayerName(player: any): string {
+    if (!player) return 'Player';
+    
+    // Check multiple possible fields for the name
+    if (player.name) return player.name;
+    if (player.displayName) return player.displayName;
+    if (typeof player === 'string') return player;
+    
+    return 'Player';
   }
 
   getAdvantagePlayer(): string {
@@ -752,6 +793,187 @@ export class MatchScorerComponent implements OnInit {
     });
   }
 
+  submitFinalScore(): void {
+    if (!this.match || !this.isValidScore()) return;
+
+    const winner = this.finalScore.team1Score > this.finalScore.team2Score ? 'team1' : 'team2';
+    
+    const submitData = {
+      gameFormat: this.match.gameFormat,
+      finalScore: {
+        team1Games: this.finalScore.team1Score,
+        team2Games: this.finalScore.team2Score,
+        winner: winner
+      },
+      status: 'completed'
+    };
+    
+    console.log('🎾 Submitting final score:', {
+      matchId: this.match.matchId,
+      data: submitData,
+      finalScore: this.finalScore
+    });
+    
+    // Use the existing final score API endpoint
+    this.scoringService.submitFinalScore(this.match.matchId, submitData).subscribe({
+      next: (response) => {
+        console.log('✅ Final score submitted successfully:', response);
+        if (response.data) {
+          this.match = response.data;
+          console.log('✅ Updated match data:', this.match);
+          
+          // Force reload match data from backend to ensure we have the latest
+          if (this.match?.matchId) {
+            this.loadMatch(this.match.matchId);
+          }
+          
+          // Show completion message
+          this.showMatchCompleteDialog();
+        }
+      },
+      error: (error) => {
+        console.error('❌ Error submitting final score:', error);
+        console.error('❌ Error details:', error.error);
+        alert('Error submitting final score. Please try again.');
+      }
+    });
+  }
+
+  isValidScore(): boolean {
+    const score1 = this.finalScore.team1Score;
+    const score2 = this.finalScore.team2Score;
+    
+    // Basic validation: scores must be non-negative and different
+    if (score1 < 0 || score2 < 0 || score1 === score2) {
+      return false;
+    }
+    
+    // Allow any valid final score - keep it simple
+    return score1 >= 0 && score2 >= 0 && score1 !== score2;
+  }
+
+  cancelMatch(): void {
+    if (!this.match) return;
+    
+    // Reset match status to scheduled
+    this.match.status = 'scheduled';
+    this.finalScore = {
+      team1Score: 0,
+      team2Score: 0
+    };
+  }
+
+  goBack(): void {
+    // Navigate back to tournament management
+    if (this.match?.tournamentId) {
+      this.router.navigate(['/tournaments', this.match.tournamentId, 'manage'], {
+        fragment: 'schedule'
+      });
+    } else {
+      this.router.navigate(['/tournaments']);
+    }
+  }
+
+  editScore(): void {
+    if (!this.match || !this.match.score) return;
+    
+    // Load current scores into the form
+    const tennisScore = this.match.score;
+    if (tennisScore.sets && tennisScore.sets.length > 0) {
+      const currentSet = tennisScore.sets[0];
+      this.finalScore = {
+        team1Score: currentSet.player1Games || tennisScore.player1Games || 0,
+        team2Score: currentSet.player2Games || tennisScore.player2Games || 0
+      };
+    } else {
+      this.finalScore = {
+        team1Score: tennisScore.player1Games || 0,
+        team2Score: tennisScore.player2Games || 0
+      };
+    }
+    
+    this.isEditingScore = true;
+  }
+
+  updateFinalScore(): void {
+    if (!this.match || !this.isValidScore()) return;
+
+    const winner = this.finalScore.team1Score > this.finalScore.team2Score ? 'team1' : 'team2';
+    
+    // Use the existing final score API endpoint
+    this.scoringService.submitFinalScore(this.match.matchId, {
+      gameFormat: this.match.gameFormat,
+      finalScore: {
+        team1Games: this.finalScore.team1Score,
+        team2Games: this.finalScore.team2Score,
+        winner: winner
+      },
+      status: 'completed'
+    }).subscribe({
+      next: (response) => {
+        console.log('Final score updated successfully:', response);
+        this.match = response.data;
+        this.isEditingScore = false;
+        
+        // Show success message
+        alert('Score updated successfully!');
+      },
+      error: (error) => {
+        console.error('Error updating final score:', error);
+        alert('Error updating final score. Please try again.');
+      }
+    });
+  }
+
+  cancelEdit(): void {
+    this.isEditingScore = false;
+    // Reset form
+    this.finalScore = {
+      team1Score: 0,
+      team2Score: 0
+    };
+  }
+
+  loadCurrentScores(): void {
+    if (!this.match || !this.match.score) {
+      this.finalScore = {
+        team1Score: 0,
+        team2Score: 0
+      };
+      return;
+    }
+    
+    const tennisScore = this.match.score;
+    
+    // Load current scores if they exist
+    if (tennisScore.sets && tennisScore.sets.length > 0) {
+      const currentSet = tennisScore.sets[0];
+      this.finalScore = {
+        team1Score: currentSet.player1Games || tennisScore.player1Games || 0,
+        team2Score: currentSet.player2Games || tennisScore.player2Games || 0
+      };
+    } else {
+      this.finalScore = {
+        team1Score: tennisScore.player1Games || 0,
+        team2Score: tennisScore.player2Games || 0
+      };
+    }
+  }
+
+  hasCurrentScore(): boolean {
+    if (!this.match || !this.match.score) return false;
+    
+    const tennisScore = this.match.score;
+    return (tennisScore.player1Games > 0 || tennisScore.player2Games > 0);
+  }
+
+  getCurrentScoreDisplay(): string {
+    if (!this.match || !this.match.score) return '';
+    
+    const tennisScore = this.match.score;
+    return `${tennisScore.player1Games || 0} - ${tennisScore.player2Games || 0}`;
+  }
+
   pauseMatch(): void {
     if (this.match) {
       this.match.status = 'suspended';
@@ -764,83 +986,6 @@ export class MatchScorerComponent implements OnInit {
     }
   }
 
-  awardPoint(player: 'player1' | 'player2'): void {
-    if (!this.match) return;
-
-    // Auto-start match if it's scheduled
-    if (this.match.status === 'scheduled') {
-      this.startMatch();
-      // Wait a moment for the status to update, then proceed
-      setTimeout(() => this.awardPointAfterStart(player), 100);
-      return;
-    }
-
-    if (this.match.status !== 'in-progress') return;
-
-    this.scoringService.updateScore(this.match.matchId, player).subscribe({
-      next: (updatedMatch) => {
-        this.match = updatedMatch;
-        this.canUndo = true;
-        
-        // Check if match was just completed
-        if (this.match?.status === 'completed' && this.match.score?.winner) {
-          console.log('🎾 Match completed! Winner:', this.match.score.winner);
-          // Small delay to ensure backend processing is complete
-          setTimeout(() => {
-            this.showMatchCompleteDialog();
-          }, 1000);
-        }
-        
-        // Switch server logic (simplified)
-        if (this.match?.score) {
-          const totalPoints = (this.match.score.player1Points || 0) + (this.match.score.player2Points || 0);
-          if (totalPoints > 0 && totalPoints % 2 === 0) {
-            this.switchServer();
-          }
-        }
-      },
-      error: (error) => {
-        console.error('Error updating score:', error);
-      }
-    });
-  }
-
-  private awardPointAfterStart(player: 'player1' | 'player2'): void {
-    if (!this.match || this.match.status !== 'in-progress') return;
-
-    this.scoringService.updateScore(this.match.matchId, player).subscribe({
-      next: (updatedMatch) => {
-        this.match = updatedMatch;
-        this.canUndo = true;
-        
-        // Switch server logic (simplified)
-        if (this.match?.score) {
-          const totalPoints = (this.match.score.player1Points || 0) + (this.match.score.player2Points || 0);
-          if (totalPoints > 0 && totalPoints % 2 === 0) {
-            this.switchServer();
-          }
-        }
-      },
-      error: (error) => {
-        console.error('Error updating score:', error);
-      }
-    });
-  }
-
-  undoLastPoint(): void {
-    console.log('Undo last point - not implemented in demo');
-    this.canUndo = false;
-  }
-
-  correctScore(): void {
-    console.log('Correct score - opening dialog');
-    // In a real implementation, this would open a dialog to manually correct the score
-  }
-
-  switchServer(): void {
-    this.currentServer = this.currentServer === 'player1' ? 'player2' : 'player1';
-  }
-
   getWinnerName(): string {
     if (!this.match?.score.winner) return '';
     
@@ -850,8 +995,24 @@ export class MatchScorerComponent implements OnInit {
   }
 
   formatFinalScore(): string {
-    if (!this.match) return '';
-    return this.scoringService.formatScoreString(this.match.score);
+    if (!this.match || !this.match.score) return '';
+    
+    console.log('🔍 Formatting final score from match:', {
+      match: this.match,
+      score: this.match.score,
+      sets: this.match.score.sets
+    });
+    
+    // For simplified scoring, show the final game scores
+    const tennisScore = this.match.score;
+    if (tennisScore.sets && tennisScore.sets.length > 0) {
+      const finalSet = tennisScore.sets[0];
+      console.log('🎾 Using set score:', finalSet);
+      return `${finalSet.player1Games}-${finalSet.player2Games}`;
+    }
+    
+    console.log('🎾 Using game score:', `${tennisScore.player1Games}-${tennisScore.player2Games}`);
+    return `${tennisScore.player1Games}-${tennisScore.player2Games}`;
   }
 
   advanceTournament(): void {
@@ -896,23 +1057,6 @@ export class MatchScorerComponent implements OnInit {
     return `${hours}:${minutes.toString().padStart(2, '0')}`;
   }
 
-  getTotalPoints(): number {
-    if (!this.match) return 0;
-    
-    // Simplified calculation
-    const score = this.match.score;
-    return score.sets.reduce((total, set) => {
-      return total + set.player1Games + set.player2Games;
-    }, 0) * 4; // Approximate points per game
-  }
-
-  getTotalGames(): number {
-    if (!this.match) return 0;
-    
-    return (this.match.score?.sets?.reduce((total, set) => {
-      return total + set.player1Games + set.player2Games;
-    }, 0) || 0) + (this.match.score?.player1Games || 0) + (this.match.score?.player2Games || 0);
-  }
 
   formatGameFormat(gameFormat: string): string {
     switch (gameFormat) {
