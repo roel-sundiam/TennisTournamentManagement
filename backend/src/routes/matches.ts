@@ -1,8 +1,11 @@
 import express, { Request, Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler';
+import { protect, authorize, optionalAuth } from '../middleware/auth';
 import Match from '../models/Match';
 import { TennisScoringService } from '../services/tennisScoring';
 import Bracket from '../models/Bracket';
+import Tournament from '../models/Tournament';
+import TimeSlot from '../models/TimeSlot';
 
 const router = express.Router();
 
@@ -49,24 +52,8 @@ async function advanceWinnerToNextRound(completedMatch: any, winnerTeam: any): P
 
     // Determine if winner goes to team1 or team2 slot in next match
     // Standard tournament bracket logic: odd matches go to team1, even matches go to team2
-    // But for Round 1 → Round 2, we need special logic to ensure proper seeding
-    let isTeam1Slot;
-    
-    if (completedMatch.round === 1) {
-      // Round 1 to Round 2 (Quarterfinals to Semifinals)
-      // Match 1 & 4 winners should meet in one semifinal
-      // Match 2 & 3 winners should meet in the other semifinal
-      if (nextMatchNumber === 1) {
-        // Semifinal 1: Match 1 winner vs Match 4 winner
-        isTeam1Slot = (completedMatch.matchNumber === 1);
-      } else {
-        // Semifinal 2: Match 2 winner vs Match 3 winner  
-        isTeam1Slot = (completedMatch.matchNumber === 2);
-      }
-    } else {
-      // For other rounds, use standard logic
-      isTeam1Slot = completedMatch.matchNumber % 2 === 1;
-    }
+    // This ensures proper bracket structure for all rounds
+    const isTeam1Slot = completedMatch.matchNumber % 2 === 1;
     
     console.log('⚡ Advancing winner:', {
       nextMatchId: nextMatch._id,
@@ -144,8 +131,8 @@ async function advanceWinnerToNextRound(completedMatch: any, winnerTeam: any): P
 
 // @desc    Get all live matches across tournaments
 // @route   GET /api/matches/live
-// @access  Public
-router.get('/live', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+// @access  Public (will be club-filtered in multi-tenant phase)
+router.get('/live', optionalAuth, asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const liveMatches = await Match.find({ status: 'in-progress' })
     .populate({
       path: 'team1',
@@ -281,6 +268,7 @@ router.post('/bulk', asyncHandler(async (req: Request, res: Response): Promise<v
       // Create the match
       const match = await Match.create({
         tournament: matchData.tournamentId,
+        club: matchData.club || tournament.club, // Auto-populate club from tournament if not provided
         round: matchData.round || 1,
         matchNumber: matchData.matchNumber || 1,
         team1: matchData.team1 || null,
@@ -447,6 +435,29 @@ router.post('/create-missing/:tournamentId', asyncHandler(async (req: Request, r
   
   console.log(`📊 Created ${createdMatches.length} missing matches`);
   
+  // Trigger auto-scheduling if tournament has it enabled AND either:
+  // 1. New matches were created, OR 
+  // 2. Matches exist but no time slots (existing tournament needs scheduling)
+  const existingTimeSlots = await TimeSlot.countDocuments({ tournament: tournamentId });
+  const totalMatches = await Match.countDocuments({ tournament: tournamentId });
+  
+  const shouldTriggerAutoScheduling = tournament && tournament.autoScheduleEnabled && 
+    (createdMatches.length > 0 || (totalMatches > 0 && existingTimeSlots === 0));
+  
+  if (shouldTriggerAutoScheduling) {
+    console.log('🗓️ Auto-scheduling enabled, triggering schedule generation...');
+    console.log(`   Created matches: ${createdMatches.length}, Total matches: ${totalMatches}, Existing time slots: ${existingTimeSlots}`);
+    try {
+      // Import the scheduling function
+      const { generateTournamentSchedule } = await import('./tournaments');
+      await generateTournamentSchedule(tournament);
+      console.log('✅ Auto-scheduling completed after matches creation');
+    } catch (error) {
+      console.error('❌ Auto-scheduling failed after matches creation:', error);
+      // Don't fail the match creation if scheduling fails
+    }
+  }
+  
   res.status(201).json({
     success: true,
     message: `Created ${createdMatches.length} missing matches`,
@@ -484,7 +495,25 @@ router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response): P
       }
     })
     .populate('tournament', 'name')
+    .populate('scheduledTimeSlot', 'startTime endTime court status')
     .sort({ round: 1, matchNumber: 1 });
+
+  console.log(`📊 Found ${matches.length} matches for tournament ${tournamentId}`);
+  
+  // Debug log to check if matches have scheduled data
+  matches.forEach((match, index) => {
+    if (index < 3) { // Log first 3 matches for debugging
+      console.log(`🔍 Match ${index + 1} data:`, {
+        id: match._id,
+        round: match.round,
+        matchNumber: match.matchNumber,
+        scheduledDateTime: match.scheduledDateTime,
+        scheduledTimeSlot: match.scheduledTimeSlot,
+        court: match.court,
+        status: match.status
+      });
+    }
+  });
 
   res.status(200).json({
     success: true,
@@ -689,7 +718,7 @@ router.put('/:id/score', asyncHandler(async (req: Request, res: Response): Promi
 // @desc    Set final score directly (for tiebreak formats)
 // @route   PUT /api/matches/:id/final-score
 // @access  Private
-router.put('/:id/final-score', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+router.put('/:id/final-score', protect, authorize('admin', 'organizer', 'club-admin'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { gameFormat, finalScore, status } = req.body;
 
   const match = await Match.findById(req.params.id)
@@ -791,6 +820,106 @@ router.put('/:id/final-score', asyncHandler(async (req: Request, res: Response):
   });
 }));
 
+// @desc    Test advancement - manually trigger advancement logic
+// @route   POST /api/matches/test-advancement/:tournamentId
+// @access  Public
+router.post('/test-advancement/:tournamentId', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tournamentId = req.params.tournamentId;
+  
+  console.log('🧪 Testing advancement for tournament:', tournamentId);
+  
+  try {
+    // Get all completed matches for this tournament
+    const completedMatches = await Match.find({ 
+      tournament: tournamentId, 
+      status: 'completed' 
+    }).populate('winner team1 team2');
+    
+    console.log(`Found ${completedMatches.length} completed matches`);
+    
+    // Check if Round 2 matches exist
+    const round2Matches = await Match.find({ 
+      tournament: tournamentId, 
+      round: 2 
+    });
+    
+    console.log(`Found ${round2Matches.length} Round 2 matches`);
+    
+    // If no Round 2 matches exist, create them
+    if (round2Matches.length === 0) {
+      console.log('Creating missing Round 2 match...');
+      
+      // Get bracket and tournament info
+      const bracket = await Bracket.findOne({ tournament: tournamentId });
+      const tournament = await Tournament.findById(tournamentId);
+      
+      if (bracket && tournament) {
+        const round2Match = await Match.create({
+          tournament: tournamentId,
+          club: tournament.club,
+          bracket: bracket._id,
+          round: 2,
+          matchNumber: 1,
+          team1: null,
+          team2: null,
+          status: 'pending',
+          matchFormat: 'best-of-3',
+          gameFormat: 'regular',
+          estimatedDuration: 90,
+          score: {
+            tennisScore: {
+              team1Points: 0,
+              team2Points: 0,
+              team1Games: 0,
+              team2Games: 0,
+              team1Sets: 0,
+              team2Sets: 0,
+              currentSet: 1,
+              sets: [],
+              isDeuce: false,
+              advantage: null,
+              isMatchPoint: false,
+              isSetPoint: false,
+              winner: null
+            },
+            isCompleted: false
+          }
+        });
+        
+        console.log('✅ Created Round 2 match:', round2Match._id);
+      }
+    }
+    
+    // Now advance all completed match winners
+    for (const match of completedMatches) {
+      if (match.winner) {
+        console.log(`Advancing winner from Round ${match.round}, Match ${match.matchNumber}`);
+        await advanceWinnerToNextRound(match, match.winner);
+      }
+    }
+    
+    // Get updated Round 2 matches
+    const updatedRound2Matches = await Match.find({ 
+      tournament: tournamentId, 
+      round: 2 
+    }).populate('team1 team2');
+    
+    res.status(200).json({
+      success: true,
+      message: 'Advancement test completed',
+      completedMatches: completedMatches.length,
+      round2Matches: updatedRound2Matches
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Test advancement error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}));
+
 // @desc    Complete match
 // @route   PUT /api/matches/:id/complete
 // @access  Private
@@ -827,7 +956,7 @@ router.put('/:id/complete', asyncHandler(async (req: Request, res: Response): Pr
 // @desc    Create new match
 // @route   POST /api/matches
 // @access  Private
-router.post('/', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+router.post('/', protect, authorize('admin', 'organizer', 'club-admin'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { tournamentId, round, team1, team2, bracketId, matchNumber } = req.body;
 
   if (!tournamentId || !team1 || !team2 || !bracketId) {

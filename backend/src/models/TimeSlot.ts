@@ -3,7 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface ITimeSlot extends Document {
   startTime: Date;
   endTime: Date;
-  court?: mongoose.Types.ObjectId;
+  court?: string;
   tournament: mongoose.Types.ObjectId;
   match?: mongoose.Types.ObjectId;
   status: 'available' | 'booked' | 'blocked';
@@ -16,13 +16,7 @@ export interface ITimeSlot extends Document {
 const TimeSlotSchema: Schema = new Schema({
   startTime: {
     type: Date,
-    required: [true, 'Start time is required'],
-    validate: {
-      validator: function(value: Date) {
-        return value > new Date();
-      },
-      message: 'Start time must be in the future'
-    }
+    required: [true, 'Start time is required']
   },
   endTime: {
     type: Date,
@@ -35,8 +29,7 @@ const TimeSlotSchema: Schema = new Schema({
     }
   },
   court: {
-    type: Schema.Types.ObjectId,
-    ref: 'Court',
+    type: String, // Change to String to match tournament.availableCourts
     required: false
   },
   tournament: {
@@ -77,8 +70,9 @@ TimeSlotSchema.index({ tournament: 1, startTime: 1 });
 TimeSlotSchema.index({ status: 1 });
 TimeSlotSchema.index({ match: 1 });
 
-// Compound index to prevent overlapping time slots on same court
-TimeSlotSchema.index({ court: 1, startTime: 1, endTime: 1 }, { unique: true });
+// Compound index to prevent overlapping time slots on same court within same tournament
+// Use sparse index to allow multiple null courts with same time
+TimeSlotSchema.index({ tournament: 1, court: 1, startTime: 1, endTime: 1 }, { unique: true, sparse: true });
 
 // Virtual for availability status
 TimeSlotSchema.virtual('isAvailable').get(function() {

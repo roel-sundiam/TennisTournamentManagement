@@ -37,18 +37,21 @@ export interface IMatchScore {
 
 export interface IMatch extends Document {
   tournament: mongoose.Types.ObjectId;
+  club: mongoose.Types.ObjectId;
   round: number;
   matchNumber: number;
-  team1: mongoose.Types.ObjectId;
-  team2: mongoose.Types.ObjectId;
+  team1?: mongoose.Types.ObjectId;
+  team2?: mongoose.Types.ObjectId;
   scheduledDateTime?: Date;
+  scheduledDate?: string;
+  scheduledTime?: string;
   court?: string;
   scheduledTimeSlot?: mongoose.Types.ObjectId;
   estimatedDuration?: number;
   actualStartTime?: Date;
   actualEndTime?: Date;
   courtAssignment?: mongoose.Types.ObjectId;
-  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled' | 'postponed';
+  status: 'pending' | 'scheduled' | 'in-progress' | 'completed' | 'cancelled' | 'postponed';
   score: IMatchScore;
   winner?: mongoose.Types.ObjectId;
   matchFormat: 'best-of-3' | 'best-of-5';
@@ -205,6 +208,11 @@ const MatchSchema: Schema = new Schema({
     ref: 'Tournament',
     required: [true, 'Tournament reference is required']
   },
+  club: {
+    type: Schema.Types.ObjectId,
+    ref: 'Club',
+    required: [true, 'Club is required for match']
+  },
   round: {
     type: Number,
     required: [true, 'Round number is required'],
@@ -218,12 +226,12 @@ const MatchSchema: Schema = new Schema({
   team1: {
     type: Schema.Types.ObjectId,
     ref: 'Team',
-    required: [true, 'Team 1 is required']
+    required: false // Allow null for future rounds that haven't been populated yet
   },
   team2: {
     type: Schema.Types.ObjectId,
     ref: 'Team',
-    required: [true, 'Team 2 is required']
+    required: false // Allow null for future rounds that haven't been populated yet
   },
   scheduledDateTime: {
     type: Date,
@@ -234,6 +242,16 @@ const MatchSchema: Schema = new Schema({
       },
       message: 'Scheduled date and time must be in the future'
     }
+  },
+  scheduledDate: {
+    type: String,
+    trim: true,
+    maxlength: [20, 'Scheduled date cannot exceed 20 characters']
+  },
+  scheduledTime: {
+    type: String,
+    trim: true,
+    maxlength: [20, 'Scheduled time cannot exceed 20 characters']
   },
   court: {
     type: String,
@@ -269,10 +287,10 @@ const MatchSchema: Schema = new Schema({
   status: {
     type: String,
     enum: {
-      values: ['scheduled', 'in-progress', 'completed', 'cancelled', 'postponed'],
+      values: ['pending', 'scheduled', 'in-progress', 'completed', 'cancelled', 'postponed'],
       message: 'Invalid match status'
     },
-    default: 'scheduled'
+    default: 'pending'
   },
   matchFormat: {
     type: String,
@@ -354,6 +372,9 @@ MatchSchema.index({ scheduledTimeSlot: 1 });
 MatchSchema.index({ courtAssignment: 1 });
 MatchSchema.index({ actualStartTime: 1 });
 MatchSchema.index({ 'bracketPosition.round': 1, 'bracketPosition.position': 1 });
+MatchSchema.index({ club: 1 });
+MatchSchema.index({ club: 1, tournament: 1 });
+MatchSchema.index({ club: 1, status: 1 });
 
 // Compound unique index to prevent duplicate matches
 MatchSchema.index({ tournament: 1, round: 1, matchNumber: 1 }, { unique: true });

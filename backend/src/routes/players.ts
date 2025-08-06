@@ -1,14 +1,39 @@
 import express, { Request, Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler';
+import { protect, authorize, optionalAuth } from '../middleware/auth';
+import { validateCoins, processCoins, showCoinInfo } from '../middleware/coinValidation';
 import Player from '../models/Player';
 
 const router = express.Router();
 
-// @desc    Get all players (global)
+// @desc    Get all players (club-filtered)
 // @route   GET /api/players
-// @access  Public
-router.get('/', asyncHandler(async (req: Request, res: Response) => {
-  const players = await Player.find({ isActive: true })
+// @access  Public (club-filtered for multi-tenant isolation)
+router.get('/', optionalAuth, ...showCoinInfo('view_players'), asyncHandler(async (req: Request, res: Response) => {
+  let query: any = { isActive: true };
+  
+  // Apply club filtering if user is authenticated
+  if (req.user) {
+    console.log('🔍 Players GET request - User:', req.user.username, 'Role:', req.user.role, 'Club:', req.user.club?.toString());
+    
+    if (req.user.role === 'super-admin') {
+      // Super-admin can see all players or filter by specific club
+      if (req.query.clubId) {
+        query.club = req.query.clubId;
+        console.log('🔍 Super-admin filtering by clubId:', req.query.clubId);
+      } else {
+        console.log('🔍 Super-admin seeing all players (no club filter)');
+      }
+    } else {
+      // Regular users can only see players from their club
+      query.club = req.user.club;
+      console.log('🔍 Regular user filtering by their club:', req.user.club?.toString());
+    }
+  } else {
+    console.log('🔍 Players GET request - No authenticated user');
+  }
+  
+  const players = await Player.find(query)
     .sort({ createdAt: -1 });
 
   res.status(200).json({
@@ -70,10 +95,11 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
-// @desc    Add player to tournament
+// @desc    Add player to tournament (updated auth)
 // @route   POST /api/players
 // @access  Private
-router.post('/', asyncHandler(async (req: Request, res: Response) => {
+router.post('/', protect, authorize('admin', 'organizer', 'club-admin', 'club-organizer'), validateCoins('add_player'), asyncHandler(async (req: Request, res: Response) => {
+  console.log('🎾🎾🎾 UPDATED Player POST route hit with authorization: admin, organizer, club-admin, club-organizer 🎾🎾🎾');
   // Debug: Log the received data
   console.log('Received player data:', JSON.stringify(req.body, null, 2));
   
@@ -108,11 +134,15 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
     phone: req.body.phone,
     dateOfBirth: req.body.dateOfBirth,
     skillLevel: req.body.skillLevel,
-    ranking: req.body.ranking
+    ranking: req.body.ranking,
+    club: req.user?.club // Assign player to user's club
   };
 
   try {
     const player = await Player.create(playerData);
+    
+    // Process coin deduction after successful player creation
+    await processCoins(req, res, () => {});
     
     res.status(201).json({
       success: true,
@@ -145,7 +175,7 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
 // @desc    Update player
 // @route   PUT /api/players/:id
 // @access  Private
-router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.put('/:id', protect, authorize('admin', 'organizer', 'club-admin', 'club-organizer'), asyncHandler(async (req: Request, res: Response) => {
   // Handle name splitting if provided
   let updateData = { ...req.body };
   if (req.body.name) {
@@ -181,7 +211,7 @@ router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
 // @desc    Delete player
 // @route   DELETE /api/players/:id
 // @access  Private
-router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/:id', protect, authorize('admin', 'organizer', 'club-admin', 'club-organizer'), asyncHandler(async (req: Request, res: Response) => {
   const player = await Player.findById(req.params.id);
 
   if (!player) {

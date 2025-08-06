@@ -1,5 +1,6 @@
 // Export all models
 export { default as User, IUser } from './User';
+export { default as Club, IClub } from './Club';
 export { default as Tournament, ITournament } from './Tournament';
 export { default as Player, IPlayer } from './Player';
 export { default as Team, ITeam } from './Team';
@@ -58,8 +59,12 @@ export const matchStatuses = [
 export type MatchStatus = typeof matchStatuses[number];
 
 // User role utilities
-export const userRoles = ['admin', 'organizer', 'player'] as const;
+export const userRoles = ['super-admin', 'club-admin', 'club-organizer', 'player'] as const;
 export type UserRole = typeof userRoles[number];
+
+// Club subscription utilities
+export const subscriptionTiers = ['free', 'premium', 'enterprise'] as const;
+export type SubscriptionTier = typeof subscriptionTiers[number];
 
 // Court utilities
 export const courtTypes = ['indoor', 'outdoor'] as const;

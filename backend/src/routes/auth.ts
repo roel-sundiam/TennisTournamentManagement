@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../middleware/errorHandler';
+import { protect } from '../middleware/auth';
 import User from '../models/User';
 
 const router = express.Router();
@@ -18,9 +19,17 @@ const generateToken = (userId: string): string => {
 router.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const { username, email, password, firstName, lastName, role } = req.body;
 
+  // Clean email - if empty string, set to undefined
+  const cleanEmail = email && email.trim() !== '' ? email : undefined;
+
   // Check if user already exists
+  const existingQuery: any = [{ username }];
+  if (cleanEmail) {
+    existingQuery.push({ email: cleanEmail });
+  }
+  
   const existingUser = await User.findOne({
-    $or: [{ email }, { username }]
+    $or: existingQuery
   });
 
   if (existingUser) {
@@ -31,22 +40,37 @@ router.post('/register', asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  // Create user
-  const user = await User.create({
+  // Create user with pending approval status
+  const userData: any = {
     username,
-    email,
+    email: cleanEmail,
     password,
     firstName,
     lastName,
-    role: role || 'organizer'
-  });
+    role: role || 'club-organizer',
+    approvalStatus: role === 'super-admin' ? 'approved' : 'pending', // Auto-approve super-admin
+    isActive: true
+  };
+
+  // Only super-admin can be created without a club
+  if (role === 'super-admin') {
+    // Super admin doesn't need a club and is auto-approved
+    userData.approvedAt = new Date();
+  } else {
+    // For other roles, they need approval
+    userData.club = undefined;
+  }
+
+  const user = await User.create(userData);
 
   // Generate token
   const token = generateToken((user._id as any).toString());
 
   res.status(201).json({
     success: true,
-    message: 'User registered successfully',
+    message: user.approvalStatus === 'pending' 
+      ? 'Registration successful! Your account is pending approval by an administrator.' 
+      : 'User registered successfully',
     token,
     user: {
       _id: user._id,
@@ -55,7 +79,9 @@ router.post('/register', asyncHandler(async (req: Request, res: Response) => {
       firstName: user.firstName,
       lastName: user.lastName,
       fullName: `${user.firstName} ${user.lastName}`,
-      role: user.role
+      role: user.role,
+      club: user.club,
+      approvalStatus: user.approvalStatus
     }
   });
 }));
@@ -64,19 +90,27 @@ router.post('/register', asyncHandler(async (req: Request, res: Response) => {
 // @route   POST /api/auth/login
 // @access  Public
 router.post('/login', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { username, email, password } = req.body;
+
+  // Support both username and email login
+  const loginField = username || email;
 
   // Validate input
-  if (!email || !password) {
+  if (!loginField || !password) {
     res.status(400).json({
       success: false,
-      message: 'Please provide email and password'
+      message: 'Please provide username (or email) and password'
     });
     return;
   }
 
-  // Check for user (include password for comparison)
-  const user = await User.findOne({ email }).select('+password');
+  // Check for user by username or email (include password for comparison)
+  let user;
+  if (username) {
+    user = await User.findOne({ username }).select('+password');
+  } else {
+    user = await User.findOne({ email }).select('+password');
+  }
 
   if (!user) {
     res.status(401).json({
@@ -95,6 +129,18 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
+  // Check if user account is approved (except for super-admin)
+  if (user.role !== 'super-admin' && user.approvalStatus !== 'approved') {
+    res.status(403).json({
+      success: false,
+      message: user.approvalStatus === 'pending' 
+        ? 'Your account is pending approval by an administrator' 
+        : 'Your account has been rejected',
+      approvalStatus: user.approvalStatus
+    });
+    return;
+  }
+
   // Check password
   const isPasswordValid = await user.comparePassword(password);
 
@@ -109,6 +155,14 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
   // Generate token
   const token = generateToken((user._id as any).toString());
 
+  console.log('🔐 Login successful for user:', {
+    userId: user._id,
+    username: user.username,
+    role: user.role,
+    club: user.club,
+    userClubType: typeof user.club
+  });
+
   res.status(200).json({
     success: true,
     message: 'Login successful',
@@ -120,7 +174,8 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
       firstName: user.firstName,
       lastName: user.lastName,
       fullName: `${user.firstName} ${user.lastName}`,
-      role: user.role
+      role: user.role,
+      club: user.club
     }
   });
 }));
@@ -128,23 +183,24 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
 // @desc    Get current user
 // @route   GET /api/auth/me
 // @access  Private
-router.get('/me', asyncHandler(async (req: Request, res: Response) => {
-  // For now, return mock user data since we don't have auth middleware yet
-  // In production, this would extract user ID from JWT token via middleware
-  
-  const mockUser = {
-    _id: '507f1f77bcf86cd799439011',
-    username: 'testuser',
-    email: 'test@tennistournament.com',
-    firstName: 'Test',
-    lastName: 'User',
-    fullName: 'Test User',
-    role: 'organizer'
-  };
+router.get('/me', protect, asyncHandler(async (req: Request, res: Response) => {
+  // User is attached to request by protect middleware
+  const user = req.user!;
 
   res.status(200).json({
     success: true,
-    data: mockUser
+    data: {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: `${user.firstName} ${user.lastName}`,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }
   });
 }));
 

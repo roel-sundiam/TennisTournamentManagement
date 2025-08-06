@@ -3,12 +3,17 @@ import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
   username: string;
-  email: string;
+  email?: string;
   password: string;
   firstName: string;
   lastName: string;
-  role: 'admin' | 'organizer' | 'player';
+  role: 'super-admin' | 'club-admin' | 'club-organizer' | 'player';
+  club?: mongoose.Types.ObjectId;
   isActive: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  approvedBy?: mongoose.Types.ObjectId;
+  approvedAt?: Date;
+  rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -25,11 +30,18 @@ const UserSchema: Schema = new Schema({
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
-    unique: true,
+    required: false,
+    // unique: true,  // Temporarily disabled
+    // sparse: true,
     trim: true,
     lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please provide a valid email']
+    validate: {
+      validator: function(v: string) {
+        // If email is provided, it must be valid
+        return !v || /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(v);
+      },
+      message: 'Please provide a valid email'
+    }
   },
   password: {
     type: String,
@@ -51,12 +63,38 @@ const UserSchema: Schema = new Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'organizer', 'player'],
-    default: 'organizer'
+    enum: {
+      values: ['super-admin', 'club-admin', 'club-organizer', 'player'],
+      message: 'Role must be super-admin, club-admin, club-organizer, or player'
+    },
+    default: 'club-organizer'
+  },
+  club: {
+    type: Schema.Types.ObjectId,
+    ref: 'Club',
+    required: false // Temporarily make club optional for registration
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  approvalStatus: {
+    type: String,
+    enum: {
+      values: ['pending', 'approved', 'rejected'],
+      message: 'Approval status must be pending, approved, or rejected'
+    },
+    default: 'pending'
+  },
+  approvedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  approvedAt: {
+    type: Date
+  },
+  rejectionReason: {
+    type: String
   }
 }, {
   timestamps: true
@@ -65,6 +103,9 @@ const UserSchema: Schema = new Schema({
 // Index for performance
 UserSchema.index({ email: 1 });
 UserSchema.index({ username: 1 });
+UserSchema.index({ club: 1 });
+UserSchema.index({ role: 1 });
+UserSchema.index({ club: 1, role: 1 });
 
 // Hash password before saving
 UserSchema.pre<IUser>('save', async function (next) {

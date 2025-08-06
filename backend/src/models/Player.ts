@@ -16,6 +16,7 @@ export interface IPlayer extends Document {
     phone: string;
     relationship: string;
   };
+  club: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -101,6 +102,11 @@ const PlayerSchema: Schema = new Schema({
       trim: true,
       maxlength: [50, 'Relationship cannot exceed 50 characters']
     }
+  },
+  club: {
+    type: Schema.Types.ObjectId,
+    ref: 'Club',
+    required: [true, 'Club is required for player']
   }
 }, {
   timestamps: true
@@ -109,6 +115,9 @@ const PlayerSchema: Schema = new Schema({
 // Indexes for performance
 PlayerSchema.index({ skillLevel: 1 });
 PlayerSchema.index({ isActive: 1 });
+PlayerSchema.index({ club: 1 });
+PlayerSchema.index({ club: 1, isActive: 1 });
+PlayerSchema.index({ club: 1, skillLevel: 1 });
 PlayerSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 // Virtual for full name

@@ -4,6 +4,7 @@ export interface ITeam extends Document {
   name: string;
   players: mongoose.Types.ObjectId[];
   tournament: mongoose.Types.ObjectId;
+  club: mongoose.Types.ObjectId;
   seed?: number;
   averageSkillLevel: 'beginner' | 'intermediate' | 'advanced' | 'professional';
   isActive: boolean;
@@ -28,6 +29,11 @@ const TeamSchema: Schema = new Schema({
     ref: 'Tournament',
     required: [true, 'Tournament reference is required']
   },
+  club: {
+    type: Schema.Types.ObjectId,
+    ref: 'Club',
+    required: [true, 'Club is required for team']
+  },
   seed: {
     type: Number,
     min: [1, 'Seed must be at least 1']
@@ -51,6 +57,8 @@ const TeamSchema: Schema = new Schema({
 // Indexes for performance
 TeamSchema.index({ tournament: 1 });
 TeamSchema.index({ tournament: 1, seed: 1 });
+TeamSchema.index({ club: 1 });
+TeamSchema.index({ club: 1, tournament: 1 });
 TeamSchema.index({ tournament: 1, isActive: 1 });
 
 // Compound unique index to prevent duplicate teams in same tournament

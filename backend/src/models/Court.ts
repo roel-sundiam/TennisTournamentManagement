@@ -8,6 +8,7 @@ export interface ICourt extends Document {
   isActive: boolean;
   notes?: string;
   capacity?: number;
+  club: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,8 +18,7 @@ const CourtSchema: Schema = new Schema({
     type: String,
     required: [true, 'Court name is required'],
     trim: true,
-    maxlength: [50, 'Court name cannot exceed 50 characters'],
-    unique: true
+    maxlength: [50, 'Court name cannot exceed 50 characters']
   },
   type: {
     type: String,
@@ -51,6 +51,11 @@ const CourtSchema: Schema = new Schema({
     min: [1, 'Capacity must be at least 1'],
     max: [100, 'Capacity cannot exceed 100'],
     default: 4
+  },
+  club: {
+    type: Schema.Types.ObjectId,
+    ref: 'Club',
+    required: [true, 'Club is required for court']
   }
 }, {
   timestamps: true
@@ -61,6 +66,12 @@ CourtSchema.index({ name: 1 });
 CourtSchema.index({ status: 1 });
 CourtSchema.index({ type: 1 });
 CourtSchema.index({ isActive: 1 });
+CourtSchema.index({ club: 1 });
+CourtSchema.index({ club: 1, status: 1 });
+CourtSchema.index({ club: 1, isActive: 1 });
+
+// Compound unique index for court name within club
+CourtSchema.index({ club: 1, name: 1 }, { unique: true });
 
 // Virtual for court display name
 CourtSchema.virtual('displayName').get(function() {

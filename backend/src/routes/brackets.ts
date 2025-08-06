@@ -1,5 +1,7 @@
 import express, { Request, Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler';
+import { protect, authorize } from '../middleware/auth';
+import { requireCoins } from '../middleware/coinValidation';
 import Bracket from '../models/Bracket';
 import Tournament from '../models/Tournament';
 import Team from '../models/Team';
@@ -52,10 +54,50 @@ router.get('/bracket/:bracketId', asyncHandler(async (req: Request, res: Respons
   });
 }));
 
+// @desc    Debug endpoint to check bracket status
+// @route   GET /api/brackets/debug/:tournamentId
+// @access  Public
+router.get('/debug/:tournamentId', asyncHandler(async (req: Request, res: Response) => {
+  const tournamentId = req.params.tournamentId;
+  
+  console.log('🔍 DEBUG: Checking bracket status for tournament:', tournamentId);
+  
+  // Get all brackets for this tournament
+  const brackets = await Bracket.find({ tournament: tournamentId })
+    .populate('tournament', 'name')
+    .populate('teams', 'name')
+    .sort({ createdAt: -1 });
+  
+  console.log('📊 DEBUG: Found', brackets.length, 'brackets for tournament');
+  
+  const debug = {
+    tournamentId,
+    bracketsFound: brackets.length,
+    brackets: brackets.map(b => ({
+      id: b._id,
+      name: b.name,
+      format: b.format,
+      status: b.status,
+      teamsCount: b.teams?.length || 0,
+      createdAt: b.createdAt,
+      updatedAt: b.updatedAt
+    }))
+  };
+  
+  console.log('📋 DEBUG: Bracket summary:', debug);
+  
+  res.status(200).json({
+    success: true,
+    data: debug
+  });
+}));
+
 // @desc    Get bracket for tournament
 // @route   GET /api/brackets/:tournamentId
 // @access  Public
 router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response) => {
+  console.log('🔍 Looking for bracket with tournament ID:', req.params.tournamentId);
+  
   const bracket = await Bracket.findOne({ tournament: req.params.tournamentId })
     .populate('tournament', 'name gameType format')
     .populate('teams', 'name players averageSkillLevel')
@@ -66,6 +108,14 @@ router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response) =>
         select: 'firstName lastName skillLevel ranking'
       }
     });
+
+  console.log('📊 Found bracket:', bracket ? 'YES' : 'NO');
+  if (bracket) {
+    console.log('🎯 Bracket ID:', bracket._id);
+    console.log('🎯 Bracket teams count:', bracket.teams?.length || 0);
+    console.log('🎯 Bracket created at:', bracket.createdAt);
+    console.log('🎯 Bracket updated at:', bracket.updatedAt);
+  }
 
   if (!bracket) {
     res.status(404).json({
@@ -84,7 +134,7 @@ router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response) =>
 // @desc    Generate/Create bracket
 // @route   POST /api/brackets
 // @access  Private
-router.post('/', asyncHandler(async (req: Request, res: Response) => {
+router.post('/', protect, authorize('admin', 'organizer', 'club-admin', 'club-organizer'), ...requireCoins('generate_bracket'), asyncHandler(async (req: Request, res: Response) => {
   const { tournamentId, format, bracketData } = req.body;
 
   if (!tournamentId || !format || !bracketData) {
@@ -137,6 +187,9 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
           select: 'firstName lastName skillLevel ranking'
         }
       });
+
+    // Note: Auto-scheduling is now triggered after matches are created (in matches.ts route),
+    // not when bracket is created, to ensure matches exist when scheduling runs
 
     res.status(201).json({
       success: true,

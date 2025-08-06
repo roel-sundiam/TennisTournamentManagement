@@ -1,6 +1,8 @@
 import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { asyncHandler } from '../middleware/errorHandler';
+import { protect, authorize } from '../middleware/auth';
+import { requireCoins } from '../middleware/coinValidation';
 import Schedule from '../models/Schedule';
 import Tournament from '../models/Tournament';
 import TimeSlot from '../models/TimeSlot';
@@ -14,7 +16,11 @@ const router = express.Router();
 // @route   POST /api/scheduling/fix-schedule
 // @access  Private
 router.post('/fix-schedule', asyncHandler(async (req: Request, res: Response) => {
+  console.log('🚨 FIX SCHEDULE ENDPOINT HIT!');
   console.log('🔧 Fix schedule request:', req.body);
+  console.log('🔧 Request headers:', req.headers);
+  console.log('🔧 Request method:', req.method);
+  console.log('🔧 Request URL:', req.url);
   
   const { tournamentId } = req.body;
   
@@ -55,11 +61,51 @@ router.post('/fix-schedule', asyncHandler(async (req: Request, res: Response) =>
     }
     
     if (availableTimeSlots.length === 0) {
-      res.status(400).json({
-        success: false,
-        message: 'No available time slots found'
-      });
-      return;
+      console.log('⚠️ No time slots found, checking if we have a schedule to create them...');
+      
+      // Try to find existing schedule for this tournament
+      const existingSchedule = await Schedule.findOne({ tournament: tournamentId });
+      
+      if (existingSchedule) {
+        console.log('📅 Found existing schedule, generating missing time slots...');
+        try {
+          await generateTimeSlots(existingSchedule);
+          
+          // Re-query for available time slots after generation
+          const newAvailableTimeSlots = await TimeSlot.find({
+            tournament: tournamentId,
+            status: 'available'
+          }).sort({ startTime: 1 });
+          
+          console.log(`⏰ Generated time slots, now have ${newAvailableTimeSlots.length} available`);
+          
+          if (newAvailableTimeSlots.length === 0) {
+            res.status(400).json({
+              success: false,
+              message: 'Failed to generate time slots - check tournament schedule configuration'
+            });
+            return;
+          }
+          
+          // Update the availableTimeSlots variable for the scheduling logic below
+          availableTimeSlots.length = 0;
+          availableTimeSlots.push(...newAvailableTimeSlots);
+          
+        } catch (error: any) {
+          console.error('❌ Error generating time slots:', error);
+          res.status(500).json({
+            success: false,
+            message: 'Failed to generate time slots: ' + error.message
+          });
+          return;
+        }
+      } else {
+        res.status(400).json({
+          success: false,
+          message: 'No available time slots found and no schedule exists to generate them'
+        });
+        return;
+      }
     }
     
     // Schedule matches to time slots
@@ -75,7 +121,7 @@ router.post('/fix-schedule', asyncHandler(async (req: Request, res: Response) =>
         await Match.findByIdAndUpdate(match._id, {
           scheduledTimeSlot: timeSlot._id,
           scheduledDateTime: timeSlot.startTime,
-          court: timeSlot.court || 'Court 1'
+          court: timeSlot.court || `Court ${i + 1}` // Use slot index as fallback court number
         });
         
         // Mark time slot as booked
@@ -114,7 +160,7 @@ router.post('/fix-schedule', asyncHandler(async (req: Request, res: Response) =>
 // @desc    Generate tournament schedule
 // @route   POST /api/scheduling/generate
 // @access  Private
-router.post('/generate', asyncHandler(async (req: Request, res: Response) => {
+router.post('/generate', protect, authorize('admin', 'organizer', 'club-admin'), ...requireCoins('schedule_generation'), asyncHandler(async (req: Request, res: Response) => {
   console.log('🗓️ Generate schedule request:', req.body);
   
   const { tournamentId, startDate, endDate, courts, timeSlotDuration, startTime, endTime, breakBetweenMatches } = req.body;
@@ -163,9 +209,9 @@ router.post('/generate', asyncHandler(async (req: Request, res: Response) => {
   const estimatedDuration = calculateEstimatedDuration(totalMatches, parseInt(timeSlotDuration), simplifiedCourts.length);
   
   // Delete existing schedule and time slots to force fresh creation
-  await Schedule.deleteMany({ tournament: tournamentId });
-  await TimeSlot.deleteMany({ tournament: tournamentId });
-  console.log('🗑️ Deleted existing schedule and time slots');
+  const deletedSchedules = await Schedule.deleteMany({ tournament: tournamentId });
+  const deletedTimeSlots = await TimeSlot.deleteMany({ tournament: tournamentId });
+  console.log(`🗑️ Deleted ${deletedSchedules.deletedCount} existing schedules and ${deletedTimeSlots.deletedCount} time slots`);
   
   // Create new schedule
   const schedule = new Schedule({
@@ -191,11 +237,95 @@ router.post('/generate', asyncHandler(async (req: Request, res: Response) => {
   await schedule.save();
   console.log('✅ Schedule saved to database:', schedule._id);
   
-  // Generate time slots
-  await generateTimeSlots(schedule);
+  try {
+    // Generate time slots
+    await generateTimeSlots(schedule);
+    console.log('✅ Time slots generated successfully');
+    
+    // Generate and schedule matches
+    await generateAndScheduleMatches(schedule);
+    console.log('✅ Matches generated and scheduled successfully');
+    
+  } catch (scheduleError: any) {
+    console.error('❌ Error during schedule generation, rolling back...');
+    console.error('❌ Schedule error:', scheduleError);
+    
+    // Rollback - delete the schedule and any time slots created
+    try {
+      await Schedule.deleteOne({ _id: schedule._id });
+      await TimeSlot.deleteMany({ tournament: tournamentId });
+      console.log('🔄 Rollback completed - schedule and time slots deleted');
+    } catch (rollbackError) {
+      console.error('❌ Error during rollback:', rollbackError);
+    }
+    
+    // Re-throw the original error
+    throw new Error(`Schedule generation failed: ${scheduleError?.message || scheduleError}`);
+  }
   
-  // Generate and schedule matches
-  await generateAndScheduleMatches(schedule);
+  // Ensure all matches are properly scheduled by running fix-schedule
+  console.log('🔧 Running fix-schedule to ensure all matches are properly scheduled...');
+  try {
+    const unscheduledMatches = await Match.find({ 
+      tournament: tournamentId,
+      scheduledDateTime: { $exists: false }
+    });
+    
+    if (unscheduledMatches.length > 0) {
+      console.log(`⚠️ Found ${unscheduledMatches.length} unscheduled matches, fixing...`);
+      
+      const availableTimeSlots = await TimeSlot.find({
+        tournament: tournamentId,
+        status: 'available'
+      }).sort({ startTime: 1 });
+      
+      const maxSchedulable = Math.min(unscheduledMatches.length, availableTimeSlots.length);
+      
+      for (let i = 0; i < maxSchedulable; i++) {
+        const match = unscheduledMatches[i];
+        const timeSlot = availableTimeSlots[i];
+        
+        try {
+          // Update the match with scheduling information first
+          const matchUpdateResult = await Match.findByIdAndUpdate(match._id, {
+            scheduledTimeSlot: timeSlot._id,
+            scheduledDateTime: timeSlot.startTime,
+            court: timeSlot.court || `Court ${i + 1}` // Use slot index as fallback court number
+          });
+          
+          if (!matchUpdateResult) {
+            throw new Error(`Failed to update match ${match._id}`);
+          }
+          
+          // Only mark the time slot as booked if match update succeeded
+          await TimeSlot.findByIdAndUpdate(timeSlot._id, {
+            status: 'booked',
+            match: match._id
+          });
+          
+          console.log(`✅ Scheduled Match ${match.matchNumber} to ${timeSlot.startTime}`);
+        } catch (error) {
+          console.error(`❌ Error scheduling match ${match.matchNumber}:`, error);
+          // If there was an error, make sure the time slot remains available
+          try {
+            await TimeSlot.findByIdAndUpdate(timeSlot._id, {
+              status: 'available',
+              $unset: { match: 1 }
+            });
+            console.log(`🔄 Reset time slot ${timeSlot._id} to available after error`);
+          } catch (resetError) {
+            console.error(`❌ Error resetting time slot:`, resetError);
+          }
+        }
+      }
+      
+      console.log(`✅ Fixed scheduling for ${maxSchedulable} matches`);
+    } else {
+      console.log('✅ All matches are already properly scheduled');
+    }
+  } catch (fixError) {
+    console.error('⚠️ Error in fix-schedule step:', fixError);
+  }
   
   res.status(201).json({
     success: true,
@@ -358,12 +488,43 @@ router.get('/:tournamentId', asyncHandler(async (req: Request, res: Response) =>
     .sort({ startTime: 1 });
   
   console.log(`📅 Found ${timeSlots.length} time slots`);
+
+  // Get all matches for this tournament with populated team data
+  const matches = await Match.find({ tournament: tournamentId })
+    .populate('team1', 'name players')
+    .populate('team2', 'name players') 
+    .populate('scheduledTimeSlot', 'startTime endTime court status')
+    .sort({ round: 1, matchNumber: 1 });
+  
+  console.log(`⚔️ Raw matches from DB: ${matches.length}`);
+  matches.forEach((match, index) => {
+    console.log(`🔍 Match ${index + 1}:`, {
+      id: match._id,
+      round: match.round,
+      matchNumber: match.matchNumber,
+      scheduledDateTime: match.scheduledDateTime,
+      scheduledTimeSlot: match.scheduledTimeSlot,
+      court: match.court,
+      status: match.status,
+      team1: (match.team1 as any)?.name || 'Team 1',
+      team2: (match.team2 as any)?.name || 'Team 2'
+    });
+  });
+  
+  console.log(`⚔️ Found ${matches.length} matches for tournament`);
+  
+  // Calculate actual scheduled matches count from database
+  // Count matches that have scheduledDateTime set
+  const actualScheduledMatches = matches.filter(match => match.scheduledDateTime != null).length;
+  
+  console.log(`📊 Scheduled matches count: ${actualScheduledMatches} (calculated from matches array) (vs schedule.scheduledMatches: ${schedule.scheduledMatches})`);
   
   const responseData = {
     tournamentId: schedule.tournament,
     totalMatches: schedule.totalMatches,
-    scheduledMatches: schedule.scheduledMatches,
+    scheduledMatches: actualScheduledMatches, // Use actual count instead of schedule.scheduledMatches
     timeSlots: timeSlots,
+    matches: matches, // Include match data in the response
     conflicts: schedule.conflicts,
     estimatedDuration: schedule.estimatedDuration,
     schedule: {
@@ -585,12 +746,20 @@ async function generateTimeSlots(schedule: any): Promise<void> {
   try {
     console.log('⏰ Generating time slots for schedule:', schedule._id);
     
-    // Clear existing time slots for this tournament
-    await TimeSlot.deleteMany({ tournament: schedule.tournament });
+    // Clear existing time slots for this tournament - use more robust deletion
+    console.log('🗑️ Deleting existing time slots...');
+    const deletedSlots = await TimeSlot.deleteMany({ tournament: schedule.tournament });
+    console.log(`🗑️ Cleared ${deletedSlots.deletedCount} existing time slots for tournament`);
+    
+    // Wait a moment to ensure deletion is complete
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     const startDate = new Date(schedule.startDate);
     const endDate = new Date(schedule.endDate);
-    const courts = schedule.courts;
+    const courts = schedule.courts || ['1', '2']; // Fallback to default courts if none specified
+    
+    console.log('🏟️ Courts for time slot generation:', courts);
+    console.log('🏟️ Courts type:', typeof courts, 'Length:', courts.length);
     
     const timeSlots: any[] = [];
     let slotsGenerated = 0;
@@ -602,28 +771,57 @@ async function generateTimeSlots(schedule: any): Promise<void> {
       const [endHour, endMin] = schedule.endTime.split(':').map(Number);
       
       // Generate slots for each court on this day  
-      for (const courtId of courts) {
-        console.log('🏟️ Creating slots for court:', courtId);
+      const safeCourts = Array.isArray(courts) && courts.length > 0 ? courts : ['Court 1', 'Court 2'];
+      console.log('🏟️ Safe courts array:', safeCourts);
+      
+      for (let courtIndex = 0; courtIndex < safeCourts.length; courtIndex++) {
+        const courtId = safeCourts[courtIndex];
+        const courtName = (courtId && courtId.toString().trim()) || `Court ${courtIndex + 1}`; // Ensure non-empty string
+        console.log('🏟️ Creating slots for court:', courtId, '→ Court name:', courtName);
         
-        let currentTime = new Date(currentDate);
-        currentTime.setHours(startHour, startMin, 0, 0);
+        // Create times in local timezone (Philippines UTC+8)
+        // Manually adjust for timezone to ensure correct storage
+        const timezoneOffsetHours = 8; // Philippines is UTC+8
         
-        const dayEndTime = new Date(currentDate);
-        dayEndTime.setHours(endHour, endMin, 0, 0);
+        // Fix timezone calculation: Convert local time to proper UTC
+        // For 7 PM local (19:00 PHT), we need to store 11:00 AM UTC  
+        // This ensures when frontend adds +8 hours, it shows 7 PM local
+        const utcStartHour = startHour - timezoneOffsetHours;
+        const utcEndHour = endHour - timezoneOffsetHours;
+        
+        // Handle negative hours (e.g., if local time is early morning)
+        const adjustedStartHour = utcStartHour < 0 ? utcStartHour + 24 : utcStartHour;
+        const adjustedEndHour = utcEndHour < 0 ? utcEndHour + 24 : utcEndHour;
+        
+        let currentTime = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), adjustedStartHour, startMin, 0, 0));
+        const adjustedDayEndTime = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), adjustedEndHour, endMin, 0, 0));
+        
+        // Debug log to verify timezone adjustment
+        console.log(`🕐 Timezone fix: Local ${startHour}:${startMin} → UTC ${currentTime.toISOString()}`);
+        console.log(`🕐 Timezone fix: Local ${endHour}:${endMin} → UTC ${adjustedDayEndTime.toISOString()}`);
         
         // Generate time slots throughout the day
-        while (currentTime < dayEndTime) {
+        while (currentTime < adjustedDayEndTime) {
           const slotEndTime = new Date(currentTime.getTime() + (schedule.timeSlotDuration * 60 * 1000));
           
-          if (slotEndTime <= dayEndTime) {
+          if (slotEndTime <= adjustedDayEndTime) {
+            // Final validation to ensure court is never null/undefined/empty
+            const finalCourtName = courtName && courtName.toString().trim() ? courtName : `Court ${courtIndex + 1}`;
+            
             const timeSlot = {
               startTime: new Date(currentTime),
               endTime: slotEndTime,
-              court: null, // Set to null to avoid Court model validation
+              // court: finalCourtName, // Temporarily removed - court field expects ObjectId but we have string
               tournament: schedule.tournament,
               status: 'available',
-              duration: schedule.timeSlotDuration
+              duration: schedule.timeSlotDuration,
+              notes: `Court: ${finalCourtName}` // Store court name in notes field instead
             };
+            
+            console.log(`🏟️ Creating time slot with court: "${finalCourtName}" at ${currentTime}`);
+            
+            // Additional validation before pushing - court validation removed since we store in notes
+            console.log(`✅ Time slot prepared for court: ${finalCourtName}`);
             
             timeSlots.push(timeSlot);
             slotsGenerated++;
@@ -638,8 +836,37 @@ async function generateTimeSlots(schedule: any): Promise<void> {
     // Save all time slots to database
     if (timeSlots.length > 0) {
       console.log(`📝 Saving ${timeSlots.length} time slots to database...`);
-      await TimeSlot.insertMany(timeSlots, { ordered: false });
-      console.log(`✅ Generated ${slotsGenerated} time slots`);
+      console.log('🔍 Sample time slot:', JSON.stringify(timeSlots[0], null, 2));
+      try {
+        const result = await TimeSlot.insertMany(timeSlots, { ordered: false });
+        console.log(`✅ Generated ${slotsGenerated} time slots`);
+        console.log(`✅ InsertMany result: ${result.length} documents inserted`);
+      } catch (error: any) {
+        console.error('❌ Error saving time slots:', error.message);
+        console.error('❌ Error details:', error);
+        
+        if (error.code === 11000) {
+          console.error('❌ Duplicate key error during time slot insertion');
+          console.error('❌ This usually means existing time slots were not properly deleted');
+          
+          // Try to delete existing slots again and retry
+          console.log('🔄 Attempting to clean up and retry...');
+          await TimeSlot.deleteMany({ tournament: schedule.tournament });
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Retry insertion
+          try {
+            const retryResult = await TimeSlot.insertMany(timeSlots, { ordered: false });
+            console.log(`✅ Generated ${slotsGenerated} time slots (after retry)`);
+            console.log(`✅ Retry InsertMany result: ${retryResult.length} documents inserted`);
+          } catch (retryError: any) {
+            console.error('❌ Retry also failed:', retryError.message);
+            throw retryError;
+          }
+        } else {
+          throw error; // Re-throw if not a duplicate key error
+        }
+      }
     }
     
   } catch (error) {
@@ -652,29 +879,54 @@ async function generateAndScheduleMatches(schedule: any): Promise<void> {
   try {
     console.log('⚔️ Generating and scheduling matches for tournament:', schedule.tournament);
     
-    // Clear existing matches for this tournament
-    await Match.deleteMany({ tournament: schedule.tournament });
+    // Check if matches already exist for this tournament
+    const existingMatches = await Match.find({ tournament: schedule.tournament });
+    console.log(`🔍 Found ${existingMatches.length} existing matches`);
     
-    // Get tournament details
-    const tournament = await Tournament.findById(schedule.tournament);
-    if (!tournament) {
-      throw new Error('Tournament not found');
+    let matches;
+    
+    if (existingMatches.length > 0) {
+      // If matches exist, just reschedule them (don't recreate)
+      console.log('✅ Using existing matches, will only update scheduling');
+      matches = existingMatches;
+      
+      // Clear existing scheduling information from matches
+      await Match.updateMany(
+        { tournament: schedule.tournament },
+        { 
+          $unset: { 
+            scheduledTimeSlot: 1,
+            scheduledDateTime: 1,
+            court: 1
+          }
+        }
+      );
+      console.log('🗑️ Cleared existing scheduling information from matches');
+    } else {
+      // If no matches exist, generate new ones
+      console.log('🆕 No existing matches found, generating new matches');
+      
+      // Get tournament details
+      const tournament = await Tournament.findById(schedule.tournament);
+      if (!tournament) {
+        throw new Error('Tournament not found');
+      }
+      
+      // Get teams/participants for this tournament
+      const teams = await Team.find({ tournament: schedule.tournament, isActive: true })
+        .sort({ seed: 1 });
+      
+      console.log(`👥 Found ${teams.length} teams for tournament`);
+      
+      if (teams.length < 2) {
+        console.log('⚠️ Not enough teams to generate matches');
+        return;
+      }
+      
+      // Generate matches based on tournament format
+      matches = await generateMatches(tournament, teams);
+      console.log(`⚔️ Generated ${matches.length} new matches`);
     }
-    
-    // Get teams/participants for this tournament
-    const teams = await Team.find({ tournament: schedule.tournament, isActive: true })
-      .sort({ seed: 1 });
-    
-    console.log(`👥 Found ${teams.length} teams for tournament`);
-    
-    if (teams.length < 2) {
-      console.log('⚠️ Not enough teams to generate matches');
-      return;
-    }
-    
-    // Generate matches based on tournament format
-    const matches = await generateMatches(tournament, teams);
-    console.log(`⚔️ Generated ${matches.length} matches`);
     
     // Get available time slots
     const timeSlots = await TimeSlot.find({ 
@@ -708,7 +960,12 @@ async function generateMatches(tournament: any, teams: any[]): Promise<any[]> {
 
 async function generateSingleEliminationMatches(tournament: any, teams: any[]): Promise<any[]> {
   const matches: any[] = [];
-  let currentTeams = [...teams];
+  // Filter out null teams
+  const validTeams = teams.filter(team => team && team._id);
+  console.log(`🔍 Single Elimination - Original teams: ${teams.length}, Valid teams: ${validTeams.length}`);
+  console.log(`🔍 Valid teams:`, validTeams.map(t => ({ id: t._id, name: t.name })));
+  
+  let currentTeams = [...validTeams];
   let round = 1;
   let matchNumber = 1;
   
@@ -721,9 +978,9 @@ async function generateSingleEliminationMatches(tournament: any, teams: any[]): 
       tournament: tournament._id,
       name: `${tournament.name} Bracket`,
       format: 'single-elimination',
-      teams: teams.map(team => team._id),
-      totalTeams: teams.length,
-      totalRounds: Math.ceil(Math.log2(teams.length)),
+      teams: validTeams.map(team => team._id),
+      totalTeams: validTeams.length,
+      totalRounds: Math.ceil(Math.log2(validTeams.length)),
       status: 'active'
     });
     await bracket.save();
@@ -739,13 +996,23 @@ async function generateSingleEliminationMatches(tournament: any, teams: any[]): 
     // Pair up teams for this round
     for (let i = 0; i < currentTeams.length; i += 2) {
       if (i + 1 < currentTeams.length) {
+        // Validate that both teams exist and have valid IDs
+        const team1 = currentTeams[i];
+        const team2 = currentTeams[i + 1];
+        
+        if (!team1 || !team1._id || !team2 || !team2._id) {
+          console.error('Invalid teams found:', { team1, team2 });
+          continue; // Skip this match if teams are invalid
+        }
+        
         // Normal match with two teams
         const match = {
           tournament: tournament._id,
+          club: tournament.club,
           round: round,
           matchNumber: matchNumber++,
-          team1: currentTeams[i]._id,
-          team2: currentTeams[i + 1]._id,
+          team1: team1._id,
+          team2: team2._id,
           status: 'scheduled',
           matchFormat: 'best-of-3',
           estimatedDuration: 90, // 90 minutes default
@@ -775,14 +1042,20 @@ async function generateSingleEliminationMatches(tournament: any, teams: any[]): 
   if (matches.length > 0) {
     const savedMatches = await Match.insertMany(matches);
     console.log(`✅ Saved ${savedMatches.length} matches to database`);
+    return savedMatches; // Return the saved matches with _id fields
   }
   
-  return matches;
+  return [];
 }
 
 async function generateRoundRobinMatches(tournament: any, teams: any[]): Promise<any[]> {
   const matches: any[] = [];
   let matchNumber = 1;
+  
+  // Filter out null teams
+  const validTeams = teams.filter(team => team && team._id);
+  console.log(`🔍 Round Robin - Original teams: ${teams.length}, Valid teams: ${validTeams.length}`);
+  console.log(`🔍 Valid teams:`, validTeams.map(t => ({ id: t._id, name: t.name })));
   
   // Create bracket if it doesn't exist
   const existingBracket = await Bracket.findOne({ tournament: tournament._id });
@@ -793,23 +1066,32 @@ async function generateRoundRobinMatches(tournament: any, teams: any[]): Promise
       tournament: tournament._id,
       name: `${tournament.name} Bracket`,
       format: 'round-robin',
-      teams: teams.map(team => team._id),
-      totalTeams: teams.length,
-      totalRounds: teams.length - 1,
+      teams: validTeams.map(team => team._id),
+      totalTeams: validTeams.length,
+      totalRounds: validTeams.length - 1,
       status: 'active'
     });
     await bracket.save();
   }
   
   // Generate all possible team combinations
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
+  for (let i = 0; i < validTeams.length; i++) {
+    for (let j = i + 1; j < validTeams.length; j++) {
+      const team1 = validTeams[i];
+      const team2 = validTeams[j];
+      
+      if (!team1 || !team1._id || !team2 || !team2._id) {
+        console.error('Invalid teams found in round-robin:', { team1, team2 });
+        continue; // Skip this match if teams are invalid
+      }
+      
       const match = {
         tournament: tournament._id,
+        club: tournament.club,
         round: 1, // All matches are in round 1 for round-robin
         matchNumber: matchNumber++,
-        team1: teams[i]._id,
-        team2: teams[j]._id,
+        team1: team1._id,
+        team2: team2._id,
         status: 'scheduled',
         matchFormat: 'best-of-3',
         estimatedDuration: 90,
@@ -828,9 +1110,10 @@ async function generateRoundRobinMatches(tournament: any, teams: any[]): Promise
   if (matches.length > 0) {
     const savedMatches = await Match.insertMany(matches);
     console.log(`✅ Saved ${savedMatches.length} round-robin matches to database`);
+    return savedMatches; // Return the saved matches with _id fields
   }
   
-  return matches;
+  return [];
 }
 
 async function scheduleMatchesToTimeSlots(matches: any[], timeSlots: any[]): Promise<void> {
@@ -856,15 +1139,19 @@ async function scheduleMatchesToTimeSlots(matches: any[], timeSlots: any[]): Pro
     const timeSlot = timeSlots[timeSlotIndex];
     
     try {
-      // Update the match with scheduling information
-      await Match.findByIdAndUpdate(match._id || match.id, {
+      // Update the match with scheduling information first
+      const matchUpdateResult = await Match.findByIdAndUpdate(match._id || match.id, {
         scheduledTimeSlot: timeSlot._id,
         scheduledDateTime: timeSlot.startTime,
         court: timeSlot.court || 'Court 1', // Fallback court name
         estimatedDuration: match.estimatedDuration || 90
       });
       
-      // Mark the time slot as booked
+      if (!matchUpdateResult) {
+        throw new Error(`Failed to update match ${match._id || match.id}`);
+      }
+      
+      // Only mark the time slot as booked if match update succeeded
       await TimeSlot.findByIdAndUpdate(timeSlot._id, {
         status: 'booked',
         match: match._id || match.id
@@ -875,6 +1162,16 @@ async function scheduleMatchesToTimeSlots(matches: any[], timeSlots: any[]): Pro
       timeSlotIndex++;
     } catch (error) {
       console.error(`❌ Error scheduling match ${match.matchNumber}:`, error);
+      // If there was an error, make sure the time slot remains available
+      try {
+        await TimeSlot.findByIdAndUpdate(timeSlot._id, {
+          status: 'available',
+          $unset: { match: 1 }
+        });
+        console.log(`🔄 Reset time slot ${timeSlot._id} to available after error`);
+      } catch (resetError) {
+        console.error(`❌ Error resetting time slot:`, resetError);
+      }
     }
   }
   
